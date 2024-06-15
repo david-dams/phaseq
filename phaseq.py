@@ -3,8 +3,6 @@ import jax
 import jax.numpy as jnp
 from jax.scipy.special import gammainc, gamma, factorial
 
-from granad import *
-
 from pyqint import PyQInt, cgf, gto
 import numpy as np
 
@@ -773,19 +771,4 @@ sto_3g = {
 if __name__ == '__main__':
     # test_overlap()
     # test_gto_repulsion()
-    test_binomial_prefactor()
-    
-# from collections import defaultdict
-
-# d = defaultdict(list)
-# m = 11
-# for i1 in range(m):
-#     for i2 in range(m):
-#         for r1 in range(i1//2+1):
-#             for r2 in range(i2//2+1):
-#                 for u in range((i1+i2)//2 - r1 - r2 + 1):
-#                     i = i1+i2-2*(r1+r2)-u
-#                     d[i].append( (i1, i2, r1, r2, u) )
-                    
-            
-        
+    test_binomial_prefactor()        
