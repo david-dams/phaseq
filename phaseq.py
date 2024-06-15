@@ -168,18 +168,6 @@ def get_nuclear(l_max):
     
     return nuclear
 
-### REPULSION ###
-# A Repulsion matrix element can be expressed as a loop: XXX.
-# Or, equivalently, as a tensor product chain: elem(*orbs) = Alpha(*coeffs, *norms) @ Beta(*lmns, *positions, *coeffs) @ Gamma( index_range(*lmns), factor(*coeffs, *pos) )
-# The tensors are given by:
-# Alpha[i, j] = XXX
-# Beta[i, j] = XXX
-# Gamma[i, j] = XXX
-
-# general idea to tackle dynamically bounded nested loops:
-# 1. prior to JIT: generate a list mapping array indices to the array of allowed index tuples list[arrI] = [ [i11, ..., i1n], [i21, ..., i2n], ... ]
-# 2. scan / sum vmap over the list, calling fused_loop_body(*idxs)
-
 def alpha(r):
     return 1/factorial(r)
 
@@ -278,32 +266,9 @@ def repulsion(orb1, orb2, orb3, orb4, angular_momenta, angular_momenta_index_lis
     # reduce memory hunger by turning vmap into map
     return jax.vmap(lambda orbs : tensor_element(orbs, angular_momenta, angular_momenta_index_list))(orb_combinations).sum()
 
-    #jax.vmap(jax.vmap(jax.vmap(lambda i, j, k : loop_body(i, j, k, lmn, 0.25*rpq2/delta), in_axes=(0, None, None)), in_axes=(None, 0, None)), in_axes=(None, None, 0))(indices, indices, indices)
-    # return inner_loop_arr[2] @ (inner_loop_arr[1] @ (inner_loop_arr[0] @ outer_loop_arr))
-    # return 2.0 * jnp.pow(jnp.pi, 2.5) / (gamma12*gamma34*jnp.sqrt(gamma12+gamma34)) * jnp.exp(-alpha1*alpha2*rab2/gamma12) * jnp.exp(-alpha3*alpha4*rcd2/gamma34) * res
-
 def update_positions(orbitals, nuclei, orbitals_to_nuclei):
     """Ensures that orbital positions match their nuclei."""    
     return orbitals.at[:, :3].set(nuclei[orbitals_to_nuclei, :3])
-
-def scf(hamiltonian, cooper, coulomb, exchange):
-    """low-level scf computation for a potential hybrid model of empirical and ab-initio parameters.
-    
-    Args:
-    hamiltonian: NxN array containing empirical TB parameters
-
-    cooper: SC coupling parameters, if None, don't consider this channel
-
-    coulomb: direct channel coupling parameters, if None, don't consider this channel
-
-    exchange: exchange coupling parameters, if None, don't consider this channel
-
-    Returns:
-    SCF Hamiltonian, Order Parameter
-    """
-    # cooper channel => build PH symmetric ham
-    # else, start loop
-    return NotImplemented
 
 # convention used for built-in gaussian basis: tuples have the form (coefficients, alphas, lmn), where lmn is exponent of cartesian coordinates x,y,z
 sto_3g = {
