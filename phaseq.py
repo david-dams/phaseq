@@ -9,21 +9,13 @@ def gamma_fun(s, x):
     
 def binomial(n, m):
     return (n > 0) * (m > 0) * (n > m) * (factorial(n) / (factorial(n - m) * factorial(m)) - 1) + 1
-
-# TODO: this must be expressible via a convolution with an s-dependent kernel
-def get_binomial_prefactor(ts):
     
-    def binomial_prefactor(s, ia, ib, xpa, xpb):
-        """Computes the binomial prefactor"""
+def binomial_prefactor(s, ia, ib, xpa, xpb):
+    # get binomial arrays
+    ia_terms = binomial(ia, s - ts) * jnp.pow(xpa, ia - s + ts)
+    ib_terms = binomial(ib, ts) * jnp.pow(xpb, ib - ts)
 
-        # get binomial arrays
-        ia_terms = binomial(ia, s - ts) * jnp.pow(xpa, ia - s + ts)
-        ib_terms = binomial(ib, ts) * jnp.pow(xpb, ib - ts)
-
-        res = jnp.where( (ts < s+1) * (s-ia <= ts) * (ts <= ib), ia_terms * ib_terms, 0).sum()
-        return res
-
-    return binomial_prefactor
+    return ((ts < s+1) * (s-ia <= ts) * (ts <= ib) * ia_terms * ib_terms).sum()
 
 def double_factorial(n):
     vals = jnp.array([1,1,2,3,8,15,48,105,384,945,3840,10395,46080,135135,645120,2027025])
@@ -277,7 +269,9 @@ sto_3g = {
             jnp.array( [ 0,0,1 ]) )
     }
 
-
-
 if __name__ == '__main__':
     pass
+
+
+
+
