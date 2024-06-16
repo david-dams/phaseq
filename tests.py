@@ -1,21 +1,11 @@
+import jax
+import jax.numpy as jnp
+
 from pyqint import PyQInt, cgf, gto
 import numpy as np
 import math
 
 class Reference:
-
-    @staticmethod 
-    def get_reference(flake, expansion):
-        def get_cgf( orb ):
-            ret = cgf(orb.position.tolist())
-            exp = expansion[orb.group_id]
-
-            for i in range(len(exp[0])):
-                ret.add_gto( exp[0][i], exp[1][i], *(exp[2].tolist()) )
-
-            return ret
-
-        return list(map(get_cgf, flake))
 
     @staticmethod
     def binomial_prefactor(s, ia, ib, xpa, xpb):
@@ -68,8 +58,8 @@ class Reference:
     def A_term(i, r, u, l1, l2, pax, pbx, cpx, gamma):
         return (math.pow(-1, i) * Reference.binomial_prefactor(i, l1, l2, pax, pbx) *
                 math.pow(-1, u) * factorial(i) * math.pow(cpx, i - 2 * r - 2 * u) *
-                math.pow(0.25 / gamma, r + u) / factorial(r) / factorial(u) / factorial(i - 2 * r - 2 * u))    
-    
+                math.pow(0.25 / gamma, r + u) / factorial(r) / factorial(u) / factorial(i - 2 * r - 2 * u))
+
 ### QUICK TESTS ###
 def test_binom():
     assert False
