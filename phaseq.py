@@ -5,6 +5,8 @@ from jax.scipy.special import gammainc, gamma, factorial
 
 jax.config.update("jax_enable_x64", True)
 
+# TODO: test overlap, kinetic
+
 ### ELEMENTARY FUNCTIONS ###
 # TODO: make function, precomputed values for factorial
 DOUBLE_FACTORIAL = jnp.array([1,1,2,3,8,15,48,105,384,945,3840,10395,46080,135135,645120,2027025])
@@ -26,9 +28,9 @@ def binomial_prefactor(s_arr, gaussian1, gaussian2, t_arr):
     """binomial prefactor array over a combined angular momentum range for two gaussians.
 
     Args:
-        mask : 
-        i, j : angular momenta
-        x1, x2 : scalar positions
+        s_arr : 
+        gaussian1, gaussian2 : 
+        t_arr :
        
     Returns:
          array of shape N x 3, where N is the size of s_arr and 3 is the Cartesian dimension
@@ -89,18 +91,27 @@ def overlap(l_arr, gaussian1, gaussian2, t_arr):
     return a * (b_arr * c_arr[:, None]).sum(axis=0).prod()
     
 ### KINETIC ###
-def kinetic(l_arr, gaussian1, gaussian2):
-    term = alpha2 * (2.0 * lmn2.sum() + 3.0) * overlap(alpha1, lmn1, pos1, alpha2, lmn2, pos2)
+def kinetic(l_arr, gaussian1, gaussian2, t_arr):
+    """nabla operator between primitive gaussians
+    
+    Args:
+        l_arr : range of angular momenta, precomputed before simulation
+        gaussian1, gaussian2 : array representations of primitive gaussians
+        t_arr : dummy array for summation, must range from 2*min(l_arr) to 2*max(l_arr), precomputed before simulation
 
-    lmn2_inc = lmn2 + 2
-    term += -2.0 * jnp.pow(alpha2, 2) * (overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[0].set(lmn2_inc[0]), pos2) +
-                                           overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[1].set(lmn2_inc[1]), pos2) +
-                                           overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[2].set(lmn2_inc[2]), pos2) )
+    Returns:
+        float, overlap    
+    """    
+    term = gaussian2[-1] * (2.0 * gaussian2[3:6].sum() + 3.0) * overlap(l_arr, gaussian1, gaussian2, t_arr)
+    
+    term += -2.0 * jnp.pow(gaussian2[-1], 2) * (overlap(l_arr, gaussian1, gaussian2.at[3].set(gaussian2[3]+2), t_arr) +
+                                                overlap(l_arr, gaussian1, gaussian2.at[4].set(gaussian2[4]+2), t_arr) +
+                                                overlap(l_arr, gaussian1, gaussian2.at[5].set(gaussian2[5]+2), t_arr) )
 
-    lmn2_dec = lmn2 - 2
-    term += -0.5 * ( (lmn2[0] * (lmn2[0] - 1)) * overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[0].set(lmn2_dec[0]), pos2) +
-             lmn2[1]*(lmn2[1]-1) * overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[1].set(lmn2_dec[1]), pos2) +
-             lmn2[2]*(lmn2[2]-1) * overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[2].set(lmn2_dec[2]), pos2) )
+    fac = gaussian2[3:6] * (gaussian[3:6] - 1)
+    term += -0.5 * ( fac[0] * overlap(l_arr, gaussian1, gaussian2.at[3].set(gaussian2[3]-2), t_arr) +
+                     fac[1] * overlap(l_arr, gaussian1, gaussian2.at[4].set(gaussian2[4]-2), t_arr) +
+                     fac[2] * overlap(l_arr, gaussian1, gaussian2.at[5].set(gaussian2[5]-2), t_arr) )
 
     return term
 
