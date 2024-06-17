@@ -87,33 +87,7 @@ def overlap(l_arr, gaussian1, gaussian2, t_arr):
     c_arr = gamma(l_arr+0.5) / (jnp.sqrt(jnp.pi) * jnp.pow(g, l_arr))
 
     return a * (b_arr * c_arr[:, None]).sum(axis=0).prod()
-
-def test_binomial_prefactor():
-
-    # primitive gaussian is always [pos, lmn, alpha]
-    g1 = jnp.array( [-0.1, 0.3, 0.7, 2, 1, 3, 0.2] )
-    g2 = jnp.array( [0.1, 0.4, 0.1, 2, 0, 5, 0.1] )
-
-    # array of combined angular momenta
-    l_max = (g1[3:6].max() + g2[3:6].max()) + 1
-    l_arr = jnp.arange(l_max)
-    t_arr = jnp.arange(2*l_arr.max() + 1)
-
-    s_arr = jnp.arange(4)
-    t_arr = jnp.arange(2*s_arr.max()+1)
-    bf = binomial_prefactor(s_arr, g1, g2, t_arr)
-    print(bf)
     
-    from tests import Reference    
-    bf1 = Reference.binomial_prefactor(s_arr[2], g1[3], g2[3], g1[0], g2[0])
-    bf2 = Reference.binomial_prefactor(s_arr[2], g1[3], g2[3], g1[0], g2[0])
-    bf3 = Reference.binomial_prefactor(s_arr[2], g1[3], g2[3], g1[0], g2[0])
-
-    
-    print(bf[2, 0] - Reference.binomial_prefactor(s_arr[2], g1[3], g2[3], g1[0], g2[0]))
-    
-    # s = overlap(l_arr, g1, g2, t_arr)    
-
 ### KINETIC ###
 def kinetic(l_arr, gaussian1, gaussian2):
     term = alpha2 * (2.0 * lmn2.sum() + 3.0) * overlap(alpha1, lmn1, pos1, alpha2, lmn2, pos2)

@@ -13,7 +13,7 @@ class Reference:
         sum = 0.0
         for t in range(s + 1):
             if (s - ia <= t) and (t <= ib):
-                sum += binomial(ia, s - t) * binomial(ib, t) * (xpa ** (ia - s + t)) * (xpb ** (ib - t))
+                sum += binom(ia, s - t) * binom(ib, t) * (xpa ** (ia - s + t)) * (xpb ** (ib - t))
         return sum
 
     @staticmethod
@@ -71,19 +71,23 @@ def test_double_factorial():
     assert False
 
 def test_binomial_prefactor():
-    bf = binomial_prefactor
-    s, ia, ib, xpa, xpb = 4, 1, 4, -0.1, 0.1
-    bf = jax.jit(bf)
-    bf(s, ia, ib, xpa, xpb)
- 
-    print(Reference.binomial_prefactor(s, ia, ib, xpa, xpb))
-    print(bf(s, ia, ib, xpa, xpb))
-    
-    print(Reference.binomial_prefactor(s, ia, ib, xpa, xpb) - bf(s, ia, ib, xpa, xpb) )
-    import pdb; pdb.set_trace()
+    from tests import Reference
 
+    # primitive gaussian is always [pos, lmn, alpha]
+    g1 = jnp.array( [-0.1, 0.3, 0.7, 2, 1, 3, 0.2] )
+    g2 = jnp.array( [0.1, 0.4, 0.1, 2, 0, 5, 0.1] )
 
-    assert abs(Reference.binomial_prefactor(s, ia, ib, xpa, xpb) - bf(s, ia, ib, xpa, xpb)) < 1e-10
+    # array of combined angular momenta
+    l_max = (g1[3:6].max() + g2[3:6].max()) + 1
+    l_arr = jnp.arange(l_max)
+    t_arr = jnp.arange(2*l_arr.max() + 1)
+
+    bf = binomial_prefactor(2*l_arr, g1, g2, t_arr)
+
+    for comp, arr in enumerate(bf):
+        for i in range(3):
+            ref = Reference.binomial_prefactor(2*l_arr[comp].astype(int), g1[3+i], g2[3+i], g1[i], g2[i])
+            assert jnp.abs(arr[i] - ref) < 1e-10
 
 def test_gto_overlap():
     integrator = PyQInt()
