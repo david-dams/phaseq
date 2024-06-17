@@ -3,89 +3,132 @@ import jax
 import jax.numpy as jnp
 from jax.scipy.special import gammainc, gamma, factorial
 
+jax.config.update("jax_enable_x64", True)
+
 ### ELEMENTARY FUNCTIONS ###
+# TODO: make function, precomputed values for factorial
+DOUBLE_FACTORIAL = jnp.array([1,1,2,3,8,15,48,105,384,945,3840,10395,46080,135135,645120,2027025])
+def double_factorial(n):
+    return
+    
 def gamma_fun(s, x):
     return gammainc(s+0.5, x) * gamma(s+0.5) * 0.5 * jnp.pow(x,-s-0.5) 
     
 def binomial(n, m):
     return (n > 0) * (m > 0) * (n > m) * (factorial(n) / (factorial(n - m) * factorial(m)) - 1) + 1
-    
-def binomial_prefactor(s, ia, ib, xpa, xpb):
-    # get binomial arrays
-    ia_terms = binomial(ia, s - ts) * jnp.pow(xpa, ia - s + ts)
-    ib_terms = binomial(ib, ts) * jnp.pow(xpb, ib - ts)
-
-    return ((ts < s+1) * (s-ia <= ts) * (ts <= ib) * ia_terms * ib_terms).sum()
-
-def double_factorial(n):
-    vals = jnp.array([1,1,2,3,8,15,48,105,384,945,3840,10395,46080,135135,645120,2027025])
-    n_max = vals.size
-    rng = jnp.arange(n_max)
-    return (n > 0) * jnp.where(rng == n, vals[rng], 0).sum() + (n < 0)
 
 def gaussian_norm(lmn, alphas):
     nom = jax.vmap(lambda a : jnp.pow(2.0, 2.0*(lmn.sum()) + 1.5) * jnp.pow(a, lmn.sum() + 1.5))(alphas)
     denom = (jax.vmap(lambda i : double_factorial(2*i-1))(lmn)).prod() * jnp.pow(jnp.pi, 1.5)
     return jnp.sqrt(nom / denom)
 
+def binomial_prefactor(s_arr, gaussian1, gaussian2, t_arr):
+    """binomial prefactor array over a combined angular momentum range for two gaussians.
+
+    Args:
+        mask : 
+        i, j : angular momenta
+        x1, x2 : scalar positions
+       
+    Returns:
+         array of shape N x 3, where N is the size of s_arr and 3 is the Cartesian dimension
+    """
+
+    # s x t dim array    
+    st = s_arr[:, None] - t_arr
+
+    # s x 3 x t dim array
+    lower_limit = t_arr[None, None, :] <= (jnp.minimum(s_arr[:, None], gaussian2[None, 3:6]))[:, :, None]
+    upper_limit = (s_arr[:, None] - gaussian1[None, 3:6])[:, :, None] <= t_arr[None, None, :]
+    mask = lower_limit * upper_limit
+    st_terms = binomial(gaussian1[None, 3:6, None], st[:, None, :]) * jnp.pow(gaussian1[None, :3, None], gaussian1[None, 3:6, None] - st[:, None, :])
+
+    # 3 x t array
+    t_terms = binomial(gaussian2[3:6, None], t_arr) * jnp.pow(gaussian2[:3, None], gaussian2[3:6,None] - t_arr)
+    
+    # contract to s x 3 array
+    contracted = jnp.einsum('it, sit->si', jnp.nan_to_num(t_terms, posinf=0, neginf=0), jnp.nan_to_num(st_terms, posinf=0, neginf=0) * mask)
+
+    return contracted                      
+
 ### OVERLAP ###
-def get_overlap_1d(l_max_range):
-    def body(val, i, l1, l2, x1, x2, gamma):
-        return jax.lax.cond(i <  1 + jnp.floor(0.5*(l1+l2)),                            
-                            lambda : val + binomial_prefactor(2*i, l1, l2, x1, x2) * double_factorial(2*i-1) / jnp.pow(2*gamma, i),
-                            lambda : val)
-
-    def wrapper(*params):
-        return jax.lax.scan(lambda val, i : (body(val, i, *params), None), 0.0, l_max_range)[0]
-
-    binomial_prefactor = get_binomial_prefactor(l_max_range)
+def overlap(l_arr, gaussian1, gaussian2, t_arr):
+    """overlap between primitive gaussians
     
-    return wrapper
+    Args:
+        l_arr : range of angular momenta, precomputed before simulation
+        gaussian1, gaussian2 : array representations of primitive gaussians
+        t_arr : dummy array for summation, must range from 2*min(l_arr) to 2*max(l_arr), precomputed before simulation
 
-def get_overlap(l_max):
-    def overlap(alpha1, lmn1, pos1, alpha2, lmn2, pos2):
-        rab2 = jnp.linalg.norm(pos1-pos2)**2
-        gamma = alpha1 + alpha2
-        p = (alpha1*pos1 + alpha2*pos2) / gamma
-        pre = jnp.pow(jnp.pi/gamma, 1.5) * jnp.exp(-alpha1*alpha2*rab2/gamma)
+    Returns:
+        float, overlap    
+    """
 
-        vpa =  p - pos1
-        vpb =  p - pos2
+    # unpack primitive gaussians
+    ra, la, aa = gaussian1[:3], gaussian1[3:6], gaussian1[-1]
+    rb, lb, ab = gaussian2[:3], gaussian2[3:6], gaussian2[-1]
 
-        wx = overlap_1d(lmn1[0], lmn2[0], vpa[0], vpb[0], gamma)
-        wy = overlap_1d(lmn1[1], lmn2[1], vpa[1], vpb[1], gamma)
-        wz = overlap_1d(lmn1[2], lmn2[2], vpa[2], vpb[2], gamma)
-        
-        return pre*wx*wy*wz
-
-    l_max_range = jnp.arange(l_max)
-    overlap_1d  = get_overlap_1d(l_max_range)
+    # add gaussians
+    g = aa + ab
+    p = (aa*ra + ab*rb) / g    
+    rap = jnp.linalg.norm(ra-p)**2
+    rbp = jnp.linalg.norm(rb-p)**2
     
-    return overlap
+    # prefactor
+    a = jnp.pow(jnp.pi / g, 1.5)  * jnp.exp( -aa*ab * jnp.linalg.norm(ra-rb)**2 / g)    
+    
+    # summation limits
+    l_limits = jnp.floor((la + lb) / 2)
 
+    # l x 3 array
+    b_arr = binomial_prefactor(2*l_arr, gaussian1, gaussian2, t_arr) * (l_arr[:, None] >= l_limits)
+
+    # double factorial array
+    c_arr = gamma(l_arr+0.5) / (jnp.sqrt(jnp.pi) * jnp.pow(g, l_arr))
+
+    return a * (b_arr * c_arr[:, None]).sum(axis=0).prod()
+
+def test_binomial_prefactor():
+
+    # primitive gaussian is always [pos, lmn, alpha]
+    g1 = jnp.array( [-0.1, 0.3, 0.7, 2, 1, 3, 0.2] )
+    g2 = jnp.array( [0.1, 0.4, 0.1, 2, 0, 5, 0.1] )
+
+    # array of combined angular momenta
+    l_max = (g1[3:6].max() + g2[3:6].max()) + 1
+    l_arr = jnp.arange(l_max)
+    t_arr = jnp.arange(2*l_arr.max() + 1)
+
+    s_arr = jnp.arange(4)
+    t_arr = jnp.arange(2*s_arr.max()+1)
+    bf = binomial_prefactor(s_arr, g1, g2, t_arr)
+    print(bf)
+    
+    from tests import Reference    
+    bf1 = Reference.binomial_prefactor(s_arr[2], g1[3], g2[3], g1[0], g2[0])
+    bf2 = Reference.binomial_prefactor(s_arr[2], g1[3], g2[3], g1[0], g2[0])
+    bf3 = Reference.binomial_prefactor(s_arr[2], g1[3], g2[3], g1[0], g2[0])
+
+    
+    print(bf[2, 0] - Reference.binomial_prefactor(s_arr[2], g1[3], g2[3], g1[0], g2[0]))
+    
+    # s = overlap(l_arr, g1, g2, t_arr)    
 
 ### KINETIC ###
-def get_kinetic(l_max):
-    
-    def kinetic(alpha1, lmn1, pos1, alpha2, lmn2, pos2):
-        term = alpha2 * (2.0 * lmn2.sum() + 3.0) * overlap(alpha1, lmn1, pos1, alpha2, lmn2, pos2)
+def kinetic(l_arr, gaussian1, gaussian2):
+    term = alpha2 * (2.0 * lmn2.sum() + 3.0) * overlap(alpha1, lmn1, pos1, alpha2, lmn2, pos2)
 
-        lmn2_inc = lmn2 + 2
-        term += -2.0 * jnp.pow(alpha2, 2) * (overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[0].set(lmn2_inc[0]), pos2) +
-                                               overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[1].set(lmn2_inc[1]), pos2) +
-                                               overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[2].set(lmn2_inc[2]), pos2) )
+    lmn2_inc = lmn2 + 2
+    term += -2.0 * jnp.pow(alpha2, 2) * (overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[0].set(lmn2_inc[0]), pos2) +
+                                           overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[1].set(lmn2_inc[1]), pos2) +
+                                           overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[2].set(lmn2_inc[2]), pos2) )
 
-        lmn2_dec = lmn2 - 2
-        term += -0.5 * ( (lmn2[0] * (lmn2[0] - 1)) * overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[0].set(lmn2_dec[0]), pos2) +
-                 lmn2[1]*(lmn2[1]-1) * overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[1].set(lmn2_dec[1]), pos2) +
-                 lmn2[2]*(lmn2[2]-1) * overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[2].set(lmn2_dec[2]), pos2) )
-        
-        return term
+    lmn2_dec = lmn2 - 2
+    term += -0.5 * ( (lmn2[0] * (lmn2[0] - 1)) * overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[0].set(lmn2_dec[0]), pos2) +
+             lmn2[1]*(lmn2[1]-1) * overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[1].set(lmn2_dec[1]), pos2) +
+             lmn2[2]*(lmn2[2]-1) * overlap(alpha1, lmn1, pos1, alpha2, lmn2.at[2].set(lmn2_dec[2]), pos2) )
 
-    l_max = l_max + 2
-    overlap = get_overlap(l_max)
-    
-    return kinetic
+    return term
 
 
 ### NUCLEAR ###
