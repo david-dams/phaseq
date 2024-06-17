@@ -32,7 +32,7 @@ We first focus on the expressions for primitive Gaussians.
 ### Overlap
 The overlap integrals can be recast as follows
 
-$a \cdot \prod_i b(l_1, l_2, \vec{d}_{AP}, \vec{d}_{BP}, i) c$
+$a \cdot \prod_i \sum_I b_I(l_1, l_2, \vec{d}_{AP}, \vec{d}_{BP}, i) c_I$
 
 where 
 
@@ -56,7 +56,7 @@ $A_I = \sum_{i-2r-u = I} a_i b_r c_u d_{i-2r-2u} = \text{Conv}_3[a, b', c'_I ]_I
 
 where $b'= \text{reverse}[\text{inflate}[b]], c'_I = \text{reverse}[c \odot d_{I}]$ and
 
-$a_i = i!$
+$a_i = i! (-1)^if_i$
 $b_r(\epsilon) = \frac{\epsilon^r}{r!}$
 $\epsilon = \gamma / 4$
 $c_u(\epsilon) = \frac{(-1)^u \epsilon^u}{u!}$
