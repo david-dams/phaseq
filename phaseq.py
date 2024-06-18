@@ -44,11 +44,13 @@ def binomial_prefactor(s_arr, gaussian1, gaussian2, t_arr):
     # contract to s x 3 array
     contracted = jnp.einsum('it, sit->si', jnp.nan_to_num(t_terms, posinf=0, neginf=0), jnp.nan_to_num(st_terms, posinf=0, neginf=0) * mask)
 
-    return contracted                      
+    return contracted    
 
 ### OVERLAP ###
 def overlap(l_arr, gaussian1, gaussian2, t_arr):
     """overlap between primitive gaussians
+
+    in abstract terms, the overlap graph is a "packing layer" transforming primitive gaussians into arrays fed into a "contraction layer"
     
     Args:
         l_arr : range of angular momenta, precomputed before simulation
@@ -85,7 +87,7 @@ def overlap(l_arr, gaussian1, gaussian2, t_arr):
     
 ### KINETIC ###
 def kinetic(l_arr, gaussian1, gaussian2, t_arr):
-    """laplace operator between primitive gaussians
+    """laplace operator between primitive gaussians. decomposes into overlaps and is just dumbly implemented as such.    
     
     Args:
         l_arr : range of angular momenta, precomputed before simulation
@@ -110,22 +112,49 @@ def kinetic(l_arr, gaussian1, gaussian2, t_arr):
 
 
 ### NUCLEAR ###
-def nuclear_pack(a, b, c, d):
-    return
+def nuclear_pack(gaussian1, gaussian2, nuc, l_arr, u_arr, u_t_arr):
+    """Packs gaussians and nuclear position into arrays    
 
-def nuclear_convolve_first(a, b, c):
-    return
-
-def nuclear_convolve_second(a, b, c):
-    return
-
-def nuclear( l_arr, gaussian1, gaussian2, t_arr, nuc):
-    """nuclear potential term (single nucleus) between primitive gaussians
-    
     Args:
-        l_arr : range of angular momenta, precomputed before simulation
         gaussian1, gaussian2 : array representations of primitive gaussians
+        l_arr : range of angular momenta, precomputed before simulation
         t_arr : dummy array for summation, must range from 2*min(l_arr) to 2*max(l_arr), precomputed before simulation
+        nuc : array holding nuclear position
+
+    Returns:
+        a : N x 3 array containing the binomial prefactor for all angular momenta and Cartesian directions
+        b' : N array containing a factor scaling with the inverse factorial
+        c' : N x m x 3 array containing 
+    """
+    
+    eps = 1/(4*g)
+    
+    # TODO: what args?
+    a = factorial(u_arr) * jnp.pow(-1, l_range) * binomial_prefactor(gaussian1, gaussian2, u_arr, u_t_arr)
+    
+    b = jnp.pow(eps, u_arr) * 1 / factorial(u_arr)
+    b = jnp.insert(arr = b, jnp.arange(0, b.size, 2), values = 0)[::-1]
+
+    c = jnp.pow(-1 * eps, u_arr) / factorial(u_arr)
+
+    d = jax.vmap(lambda I, u : jnp.pow(p, I - u) / factorial(I - u), l_arr, u_arr)
+
+    c = d * c[None,:]
+    
+    return a, b, c[:, ::-1]
+
+def nuclear(gaussian1, gaussian2, l_arr, u_arr, u_t_arr, nuc):
+    """nuclear potential term (single nucleus) between primitive gaussians.
+
+    in abstract terms, it consists of a "packing" layer transforming primitive gaussians into arrays fed into a convolution layer which are again fed into a convolution layer and a dot product like so
+
+    nuclear = conv(conv(pack(gaussians))) @ gamma_fun
+    
+    Args:    
+        gaussian1, gaussian2 : array representations of primitive gaussians
+        l_arr : range of combined angular momenta, precomputed before simulation
+        u_arr : range single electron angular momenta
+        u_t_arr : dummy array for summation over u
         nuc : array holding nuclear position
 
     Returns:
@@ -134,22 +163,54 @@ def nuclear( l_arr, gaussian1, gaussian2, t_arr, nuc):
     
     # unpack primitive gaussians
     ra, la, aa = gaussian1[:3], gaussian1[3:6], gaussian1[-1]
-    rb, lb, ab = gaussian2[:3], gaussian2[3:6], gaussian2[-1]
+    rb, lb, ab = gaussian2[:3], gaussian2[3:6], gaussian2[-1]    
 
-    # "packing" layer: map a,b,c,d to a, b', c'    
-    a, b_prime, c_prime = nuclear_pack(a,b,c,d)
+    # "packing" layer: map gaussians to a, b', c'    
+    a, b_prime, c_prime = nuclear_pack(gaussian1, gaussian2, nuc, l_arr, u_arr, u_t_arr)
 
-    # first convolution layer
-    a_arr = nuclear_convolve_first(a, b_prime, c_prime)
+    # first convolution layer along cartesian axis produces a N x 3 array
+    a_arr = jax.vmap(nuclear_convolve_first)(a, b_prime, c_prime)
 
-    # second convolution layer
-    out = nuclear_convolve_second(a_arr, a_arr, a_arr)
+    # second convolution layer produces N-dim array
+    out = nuclear_convolve_second(a_arr[:,0], a_arr[:,1], a_arr[:,2])
 
     # dot product
-    f_arr = ...
+    f_arr = gamma_fun(l_range)
     return f @ out
 
-def interaction(l_arr, gaussian1, gaussian2, gaussian3, gaussian4, t_arr):
+def interaction_pack(gaussian1, gaussian2, gaussian3, gaussian4, nuc, l_arr, u_arr, u_t_arr):
+    """Packs gaussians and nuclear position into arrays    
+
+    Args:
+        gaussian1, gaussian2, gaussian3, gaussian4 : array representations of primitive gaussians
+        l_arr : range of angular momenta, precomputed before simulation
+        t_arr : dummy array for summation, must range from 2*min(l_arr) to 2*max(l_arr), precomputed before simulation
+        nuc : array holding nuclear position
+
+    Returns:
+        alpha : N array containing the inverse factorial
+        beta' : N x 3 array containing the binomial prefactor scaled with the factorial
+        gamma : N - array containing a combinatorial factor
+        c : N x m x 3 array containing multinomial geometric factor
+    """
+    
+    eps = 1/(4*g)
+    
+    # TODO: what args?
+    a = factorial(u_arr) * jnp.pow(-1, l_range) * binomial_prefactor(gaussian1, gaussian2, u_arr, u_t_arr)
+    
+    b = jnp.pow(eps, u_arr) * 1 / factorial(u_arr)
+    b = jnp.insert(arr = b, jnp.arange(0, b.size, 2), values = 0)[::-1]
+
+    c = jnp.pow(-1 * eps, u_arr) / factorial(u_arr)
+
+    d = jax.vmap(lambda I, u : jnp.pow(p, I - u) / factorial(I - u), l_arr, u_arr)
+
+    c = d * c[None,:]
+    
+    return a, b, c[:, ::-1]
+
+def interaction(gaussian1, gaussian2, gaussian3, gaussian4, l_arr, t_arr):
     """interaction term between primitive gaussians
 
     Args:
@@ -161,22 +222,17 @@ def interaction(l_arr, gaussian1, gaussian2, gaussian3, gaussian4, t_arr):
     Returns:
        float
     """
-    
-    cs1, alphas1, lmn1, ps1, cs2, alphas2, lmn2, ps2, cs3, alphas3, lmn3, ps3, cs4, alphas4, lmn4, ps4 = orb1[:m], orb1[m:2*m], orb1[-6:-3], orb1[-3:], orb2[:m], orb2[m:2*m], orb2[-6:-3], orb2[-3:], orb3[:m], orb3[m:2*m], orb3[-6:-3], orb3[-3:], orb4[:m], orb4[m:2*m], orb4[-6:-3], orb4[-3:]
 
-    
-    # TODO: contraction of beta and gamma gives tensor of dimension N x N x N x N
-    bg = repulsion_beta_times_gamma()
+    # first layer: unpack
+    alpha, beta, gamma, c = pack_interaction()
 
-    # TODO: all possible orbital combinations
-    orb_combinations = combinations
-    
-    # reduce memory hunger by turning vmap into map
-    return jax.vmap(lambda orbs : tensor_element(orbs, angular_momenta, angular_momenta_index_list))(orb_combinations).sum()
+    # second layer: convolution and hadamard product
+    a_arr = gamma * jax.vmap(nuclear_convolve_first)(alpha, beta)
 
-def update_positions(orbitals, nuclei, orbitals_to_nuclei):
-    """Ensures that orbital positions match their nuclei."""    
-    return orbitals.at[:, :3].set(nuclei[orbitals_to_nuclei, :3])
+    # third layer: convolution and dot product
+    out = nuclear_convolve_second(a_arr[:,0], a_arr[:,1], a_arr[:,2])
+    f_arr = gamma_fun(l_range)
+    return f @ out
 
 # convention used for built-in gaussian basis: tuples have the form (coefficients, alphas, lmn), where lmn is exponent of cartesian coordinates x,y,z
 sto_3g = {
