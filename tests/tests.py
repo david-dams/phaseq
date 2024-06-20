@@ -89,6 +89,12 @@ def test_binomial_prefactor():
             ref = Reference.binomial_prefactor(2*l_arr[comp].astype(int), g1[3+i], g2[3+i], g1[i], g2[i])
             assert jnp.abs(arr[i] - ref) < 1e-10
 
+def test_prim_overlap():
+    assert False
+
+def test_prim_kinetic():
+    assert False
+
 def test_gto_overlap():
     integrator = PyQInt()
 

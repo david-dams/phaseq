@@ -48,7 +48,7 @@ The first group of nesting levels can be written as
 
 $\sum_{ijk} A_i B_j C_k F_{i+j+k} = \sum_I F_I \sum_{i+j+k=I} A_i B_j C_k = \sum_I F_I \text{Conv}_3[A,B,C]_I$
 
-where $\text{Conv}_3$ denotes the triple convolution operator.
+where $\text{Conv}_3$ denotes the triple convolution operator. The summation over $I$ ranges from $0$ to $l_1 + l_2 + m_1 + m_2 + n_1 + n_2$.
 
 The second group of nesting levels can be transformed upon redefining $d_{I, u} = d_{I-u}$ as follows
 

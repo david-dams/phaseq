@@ -13,8 +13,9 @@ DOUBLE_FACTORIAL = jnp.array([1,1,2,3,8,15,48,105,384,945,3840,10395,46080,13513
 def double_factorial(n):
     return
     
-def gamma_fun(s, x):
-    return gammainc(s+0.5, x) * gamma(s+0.5) * 0.5 * jnp.pow(x,-s-0.5) 
+def boys_fun(index, arg):
+    """computes the boys function for the specified index and scalar argument"""
+    return gammainc(index+0.5, arg) * gamma(index+0.5) * 0.5 * jnp.pow(arg,-index-0.5) 
     
 def binomial(n, m):
     return (n > 0) * (m > 0) * (n > m) * (factorial(n) / (factorial(n - m) * factorial(m)) - 1) + 1
@@ -46,7 +47,20 @@ def binomial_prefactor(s_arr, gaussian1, gaussian2, t_arr):
     # contract to s x 3 array
     contracted = jnp.einsum('it, sit->si', jnp.nan_to_num(t_terms, posinf=0, neginf=0), jnp.nan_to_num(st_terms, posinf=0, neginf=0) * mask)
 
-    return contracted    
+    return contracted
+
+def pack_gaussian_pair(gaussian1, gaussian2):
+    # unpack primitive gaussians
+    ra, la, aa = gaussian1[:3], gaussian1[3:6], gaussian1[-1]
+    rb, lb, ab = gaussian2[:3], gaussian2[3:6], gaussian2[-1]
+
+    # add gaussians
+    g = aa + ab
+    p = (aa*ra + ab*rb) / g    
+    rap = jnp.linalg.norm(ra-p)**2
+    rbp = jnp.linalg.norm(rb-p)**2
+
+    return ra, la, aa, rb, lb, ab, g, p, rap, rbp
 
 ### OVERLAP ###
 def overlap(l_arr, gaussian1, gaussian2, t_arr):
@@ -63,15 +77,8 @@ def overlap(l_arr, gaussian1, gaussian2, t_arr):
         float, overlap    
     """
 
-    # unpack primitive gaussians
-    ra, la, aa = gaussian1[:3], gaussian1[3:6], gaussian1[-1]
-    rb, lb, ab = gaussian2[:3], gaussian2[3:6], gaussian2[-1]
-
-    # add gaussians
-    g = aa + ab
-    p = (aa*ra + ab*rb) / g    
-    rap = jnp.linalg.norm(ra-p)**2
-    rbp = jnp.linalg.norm(rb-p)**2
+    # pack gaussians
+    ra, la, aa, rb, lb, ab, g, p, rap, rbp = pack_gaussian_pair(gaussian1, gaussian2)
     
     # prefactor
     a = jnp.pow(jnp.pi / g, 1.5)  * jnp.exp( -aa*ab * jnp.linalg.norm(ra-rb)**2 / g)    
@@ -128,76 +135,75 @@ def kinetic(l_arr, gaussian1, gaussian2, t_arr):
 # c.size = (6*l_max, l_max)
 # A needs to be masked as follows: [0, l_1+l_2]
 
-def nuclear_pack(gaussian1, gaussian2, nuc, l_arr, u_arr):
+def nuclear_pack(gaussian1, gaussian2, nuc, l_arr):
     """Packs gaussians and nuclear position into arrays    
 
     Args:
         gaussian1, gaussian2 : array representations of primitive gaussians
-        l_arr : range of combined angular momenta from 0 to 6*l_max
-        u_arr : range of isolated angular momenta from 0 to 2*l_max
+        l_arr : range of combined angular momenta from 0 to 2*l_max
         nuc : 3 array, nucleus position
 
     Returns:
-        a : m x 3 array containing the binomial prefactor for all isolated angular momenta and Cartesian directions
-        b' : m array containing a factor scaling with the inverse factorial
-        c' : N x m x 3 array containing combined and isolated angular momentum arrays
+        a  : N x 3 array 
+        b' : N array 
+        c' : N x N x 3 array 
+        g : float
     """
 
-    # unpack primitive gaussians
-    ra, la, aa = gaussian1[:3], gaussian1[3:6], gaussian1[-1]
-    rb, lb, ab = gaussian2[:3], gaussian2[3:6], gaussian2[-1]
+    # pack gaussians
+    ra, la, aa, rb, lb, ab, g, p, rap, rbp = pack_gaussian_pair(gaussian1, gaussian2)
 
-    # add gaussians
-    g = aa + ab
-    p = (aa*ra + ab*rb) / g    
-    rap = jnp.linalg.norm(ra-p)**2
-    rbp = jnp.linalg.norm(rb-p)**2
+    # derived quantity
     eps = 1/(4*g)
 
     # relative position of center and nucleus    
     pc = p - nuc
 
     # N x 3 arr
-    a = (factorial(u_arr) * jnp.pow(-1, u_arr))[:, None] * binomial_prefactor(u_arr, gaussian1, gaussian2, u_arr)
+    a_arr = (factorial(l_arr) * jnp.pow(-1, l_arr))[:, None] * binomial_prefactor(l_arr, gaussian1, gaussian2, l_arr)
 
     # N arr
-    b = jnp.pow(eps, u_arr) * 1 / factorial(u_arr)
-    b = jnp.insert(arr = b, obj = jnp.arange(0, b.size, 2), values = 0)[::-1]
+    b_arr = jnp.pow(eps, l_arr) * 1 / factorial(l_arr)
+
+    # TODO: size used => no JIT!
+    b_arr = jnp.insert(arr = b_arr, obj = jnp.arange(0, b_arr.size) + 1, values = 0)
 
     # N arr
-    c = jnp.pow(-1 * eps, u_arr) / factorial(u_arr)
+    c_arr = jnp.pow(-1 * eps, l_arr) / factorial(l_arr)
     
     # M x N x 3 arr
-    d = jax.vmap(jax.vmap(lambda I, u : jnp.pow(pc, I - u) / factorial(I - u), in_axes = (0, None)), in_axes=(None,0))(l_arr, u_arr)
+    d_arr = jax.vmap(jax.vmap(lambda I, u : jnp.pow(pc, I - u) / factorial(I - u), in_axes = (0, None)), in_axes=(None,0))(l_arr, l_arr)
     
     # M x N x 3 arr
-    c = d * c[:, None, None]    
-    return a, b, jnp.nan_to_num(c[:, ::-1], posinf = 0, neginf = 0)
+    c_arr = d_arr * c_arr[:, None, None]
+    return a_arr, b_arr, jnp.nan_to_num(c_arr, posinf = 0, neginf = 0), g
 
-
-def nuclear(gaussian1, gaussian2, nuc, l_arr, u_arr):
+def nuclear(gaussian1, gaussian2, nuc, l_arr):
     """nuclear potential term (single nucleus) between primitive gaussians.
 
     in abstract terms, it consists of a "packing" layer transforming primitive gaussians into arrays fed into a convolution layer which are again fed into a convolution layer and a dot product like so
 
-    nuclear = conv(conv(pack(gaussians))) @ gamma_fun
+    nuclear = conv(conv(pack(gaussians))) @ boys_fun
     
     Args:    
         gaussian1, gaussian2 : array representations of primitive gaussians
-        l_arr : range of combined angular momenta from 0 to 6*l_max
-        u_arr : range of isolated angular momenta from 0 to 2*l_max
+        l_arr : range of angular momenta from 0 to 2*l_max
         nuc : 3 array, nucleus position
 
     Returns:
         float, overlap    
     """
-    
-    # unpack primitive gaussians
-    ra, la, aa = gaussian1[:3], gaussian1[3:6], gaussian1[-1]
-    rb, lb, ab = gaussian2[:3], gaussian2[3:6], gaussian2[-1]    
+    # the innermost loop is $r_{I \geq 0} = \sum_{i - j - k} a_i b'_j c'_k$
+    # this can be expressed as $r_{I \geq 0} = Conv[a, Conv[b', c']]_{I \geq 0}$
 
-    # "packing" layer: map gaussians to a, b', c'    
-    a, b_prime, c_prime = nuclear_pack(gaussian1, gaussian2, nuc, l_arr, u_arr)
+    # "packing" layer    
+    a_arr, b_arr, c_arr = nuclear_pack(gaussian1, gaussian2, nuc, l_arr)
+
+    # first convolution N x N x 3, 2N => N x (3N - 1) x 3
+    conv_ab = jax.vmap(lambda x : jnp.convolve(b_arr, x))(c_arr.T)
+
+    # second convolution N x (3N - 1) x 3, N x 3 => N x 3
+    conv_abc = jax.vmap(lambda x: jax.vmap(lambda y : jnp.convolve(x, y)))(conv_ab, c_prime)
 
     # first convolution layer along cartesian axis produces a N x 3 array
     a_arr = jax.vmap(nuclear_convolve_first)(a, b_prime, c_prime)
@@ -206,20 +212,45 @@ def nuclear(gaussian1, gaussian2, nuc, l_arr, u_arr):
     out = nuclear_convolve_second(a_arr[:,0], a_arr[:,1], a_arr[:,2])
 
     # dot product
-    f_arr = gamma_fun(l_range)
+    f_arr = boys_fun(l_range)
     return f @ out
 
 # primitive gaussian is always [pos, lmn, alpha]
-g1 = jnp.array( [-0.1, 0.3, 0.7, 2, 1, 3, 0.2] )
-g2 = jnp.array( [0.1, 0.4, 0.1, 2, 0, 5, 0.1] )
+gaussian1 = jnp.array( [-0.1, 0.3, 0.7, 2, 1, 3, 0.2] )
+gaussian2 = jnp.array( [0.1, 0.4, 0.1, 2, 0, 5, 0.1] )
+
+gaussian1 = jnp.array( [-0.1, 0.3, 0.7, 1, 1, 1, 0.2] )
+gaussian2 = jnp.array( [0.1, 0.4, 0.1, 1, 0, 1, 0.1] )
 
 nuc = jnp.arange(3) + 0.0
 
 # array of combined angular momenta
-l_max = (g1[3:6].max() + g2[3:6].max()) + 1
-u_arr = jnp.arange(2*l_max)
-l_arr = jnp.arange(6*l_max)
-a,b,c = nuclear(g1, g2, nuc, l_arr, u_arr)
+l_max = max(gaussian1[3:6].max(), gaussian2[3:6].max()) 
+l_arr = jnp.arange(2*l_max)
+# a,b,c = nuclear(g1, g2, nuc, l_arr)
+
+# "packing" layer    
+a_arr, b_arr, c_arr, g = nuclear_pack(gaussian1, gaussian2, nuc, l_arr)
+
+# b * c
+# first convolution N x N x 3, 2N => N x 3 x (3N - 1)
+x = jax.vmap(lambda y : jax.vmap(lambda x : jnp.convolve(b_arr, x))(y.T))(c_arr)
+
+# A = a . b * c
+# second convolution N x 3 x (3N - 1), N x 3 => N x 3 x (4N - 2)
+# vmapping over last axis of x and then Cartesian axis of x and a_arr
+final_arrs = jax.vmap(lambda x1 : jax.vmap(jnp.convolve, in_axes=(0,0))(x1, a_arr.T) )(x)
+
+# skip strictly positive indices N x 3 x (4N - 2) => 3 x N
+final_arrs = jnp.diagonal(final_arrs[..., (x.shape[-1]-1):], axis1=0, axis2=2)
+
+# final layer is convolution of cartesian arrays
+conv = jnp.convolve(final_arrs[0], jnp.convolve(final_arrs[1], final_arrs[2]))
+
+# function array over unique range
+f_arr = boys_fun( jnp.arange(conv.size), cp2 * g )
+
+res = f_arr @ conv
 
 ### INTERACTION ###
 # interaction loop is basically
@@ -290,7 +321,7 @@ def interaction(gaussian1, gaussian2, gaussian3, gaussian4, l_arr, t_arr):
 
     # third layer: convolution and dot product
     out = nuclear_convolve_second(a_arr[:,0], a_arr[:,1], a_arr[:,2])
-    f_arr = gamma_fun(l_range)
+    f_arr = boys_fun(l_range)
     return f @ out
 
 # convention used for built-in gaussian basis: tuples have the form (coefficients, alphas, lmn), where lmn is exponent of cartesian coordinates x,y,z
