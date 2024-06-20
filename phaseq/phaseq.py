@@ -121,20 +121,6 @@ def kinetic(l_arr, gaussian1, gaussian2, t_arr):
 
 
 ### NUCLEAR ###
-# nuclear loop is basically
-# L = \sum_{n} F_n \sum_{I+J+K = n} G_I G_J G_K
-# I \in [0, l_1 + l_2]
-# J \in [0, m_1 + m_2]
-# K \in [0, n_1 + n_2]
-# padded: n, I, J, K \in [0, 6*l_max]
-# this can be expressed as
-# L = F @ Conv_3[A(l_1+l_2, r_x), A(m_1+m_2, r_y), A(n_1+n_2, r_z)]
-# A(l_1+l_2, r_x) = Conv_3[a, b, c[:]]
-# such that len(A) = 6 * l_max
-# len(a) = len(b) = 2*l_max
-# c.size = (6*l_max, l_max)
-# A needs to be masked as follows: [0, l_1+l_2]
-
 def nuclear_pack(gaussian1, gaussian2, nuc, l_arr):
     """Packs gaussians and nuclear position into arrays    
 
@@ -253,21 +239,6 @@ f_arr = boys_fun( jnp.arange(conv.size), cp2 * g )
 res = f_arr @ conv
 
 ### INTERACTION ###
-# interaction loop is basically
-# L = \sum_{n} F_n \sum_{I+J+K = n} G_I G_J G_K
-# I \in [0, l_1 + l_2 + l_3 + l_4]
-# J \in [0, m_1 + m_2 + m_3 + m_4]
-# K \in [0, n_1 + n_2 + n_3 + n_4]
-# padded: n, I, J, K \in [0, 12*l_max]
-# this can be expressed as
-# L = F @ Conv_3[A(l_1+l_2+l_3+l_4, r_x), A(m_1+m_2+m_3+m_4, r_y), A(n_1+n_2+n_3+n_4, r_z)]
-# A(l_1+l_2, r_x) = Conv_3[a, b, c[:]]
-# b[i] = (-1)**i * a[i]
-# a = gamma * Conv[alpha, beta]
-# alpha_i = 1/i!
-# beta_i \sim i! f_i
-# c[i, j]
-
 def interaction_pack(gaussian1, gaussian2, gaussian3, gaussian4, nuc, l_arr, u_arr, u_t_arr):
     """Packs gaussians and nuclear position into arrays    
 
