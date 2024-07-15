@@ -2,3 +2,7 @@ test overlap
 test kinetic
 test nuclear
 test repulsion
+
+convenience functions for determining angular momentum arrays
+
+make double factorial nicer
