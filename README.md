@@ -6,7 +6,7 @@ Electron matrix elements as differentiable compute graphs.
 
 A general electronic Hamiltonian can be expressed (denoting creators / annihilators by capital / small letters) as
 
-$H = T^{ab} Ab + V_{ab} Ab + U_{abcd} ABcd$
+$H = T_{ab} Ab + V_{ab} Ab + U_{abcd} ABcd$
 
 where $T,V, U$ are the kinetic, nuclear and interaction matrix representations.
 
@@ -36,9 +36,13 @@ $a \cdot \prod_i \sum_I b_I(l_1, l_2, \vec{d}_{AP}, \vec{d}_{BP}, i) c_I$
 
 where 
 
-$a = \frac{\pi}{\gamma}^{3/2} e^{-\alpha_1 \alpha_2 \vec{d}_{AB}^2 / \gamma}$
-$b = f_{2i}(l_1, l_2,\vec{d}_{i, AP}, \vec{d}_{i, BP} )$
-$c_i = \frac{(2i-1)!!}{(2 \gamma)^i}$
+$
+\begin{align*}
+a &= \frac{\pi}{\gamma}^{3/2} e^{-\alpha_1 \alpha_2 \vec{d}_{AB}^2 / \gamma} \\
+b &= f_{2i}(l_1, l_2,\vec{d}_{i, AP}, \vec{d}_{i, BP} ) \\
+c_i &= \frac{(2i-1)!!}{(2 \gamma)^i}
+\end{align*}
+$
 
 ### Kinetic
 $\alpha_2 \cdot (2(l_2+m_2+n_2) + 3)S(l_2, m_2, n_2) - 2 \alpha_2^2(S(l_2+2,m_2,n_2) + S(l_2,m_2+2,n_2) + S(l_2,m_2,n_2+2)) - \frac{1}{2}( l_2(l_2-1)S(l_2-2, m_2, n_2) + m_2(m_2-2)S(l_2, m_2-2, n_2) + n_2(n_2 - 1)S(l_2, m_2, n_2-2))$
