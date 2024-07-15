@@ -48,7 +48,7 @@ The first group of nesting levels can be written as
 
 $\sum_{ijk} A_i B_j C_k F_{i+j+k} = \sum_I F_I \sum_{i+j+k=I} A_i B_j C_k = \sum_I F_I \text{Conv}_3[A,B,C]_I$
 
-where $\text{Conv}_3$ denotes the triple convolution operator. The summation over $I$ ranges from $0$ to $l_1 + l_2 + m_1 + m_2 + n_1 + n_2$.
+where $\text{Conv}_3$ denotes the triple convolution operator. The summation over $I$ ranges from $0$ to $l_1 + l_2 + m_1 + m_2 + n_1 + n_2 - 2$.
 
 The second group of nesting levels can be transformed upon redefining $d_{I, u} = d_{I-u}$ as follows
 
@@ -56,11 +56,15 @@ $A_I = \sum_{i-2r-u = I} a_i b_r c_u d_{i-2r-2u} = \text{Conv}_3[a, b', c'_I ]_I
 
 where $b'= \text{reverse}[\text{inflate}[b]], c'_I = \text{reverse}[c \odot d_{I}]$ and
 
-$a_i = i! (-1)^if_i$
-$b_r(\epsilon) = \frac{\epsilon^r}{r!}$
-$\epsilon = \gamma / 4$
-$c_u(\epsilon) = \frac{(-1)^u \epsilon^u}{u!}$
-$d_{i-2r-2u}(p) = \frac{p^{i-2r-2u}}{(i-2r-2u)!}$
+$
+\begin{align*}
+a_i &= i! (-1)^if_i \\
+b_r(\epsilon) &= \frac{\epsilon^r}{r!} \\
+\epsilon &= \gamma / 4 \\
+c_u(\epsilon) &= \frac{(-1)^u \epsilon^u}{u!} \\
+d_{i-2r-2u}(p) &= \frac{p^{i-2r-2u}}{(i-2r-2u)!}
+\end{align*}
+$
 
 ### Interaction
 
@@ -75,10 +79,13 @@ The second group of nesting levels can be transformed to be
 $A_I = \sum_{l+m+n = I} a_l b_m c_{l+m+n,n} = \text{Conv}_3[a,b,c_I]_{I}$
 
 where
-
-$a_l = a_l(l_1, l_2, pa, pb, g_1)$
-$b_m = (-1)^m a_m(l_3, l_4, qc, qd, g_2)$
-$c_{l+m+n,n}(p) = \frac{(l+m)! p^{l+m+2n}(-1)^{-n}}{n!(l+m+2n)! \delta^{l+m+n}}$
+$
+\begin{align*}
+a_l &= a_l(l_1, l_2, pa, pb, g_1) \\
+b_m &= (-1)^m a_m(l_3, l_4, qc, qd, g_2) \\
+c_{l+m+n,n}(p) &= \frac{(l+m)! p^{l+m+2n}(-1)^{-n}}{n!(l+m+2n)! \delta^{l+m+n}}
+\end{align*}
+$
 
 Finally, the third group of nesting levels can be recast to
 
