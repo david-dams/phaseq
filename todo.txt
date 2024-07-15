@@ -1,0 +1,4 @@
+test overlap
+test kinetic
+test nuclear
+test repulsion
