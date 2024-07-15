@@ -82,6 +82,8 @@ def overlap(l_arr, gaussian1, gaussian2, t_arr):
     # l x 3 array
     d1 = p - gaussian1[:3]
     d2 = p - gaussian2[:3]
+
+    # in the loopy formulation, we sum over 2*i => array, where arr[i] ~ f(2*i)
     b_arr = binomial_prefactor(2*l_arr, gaussian1.at[:3].set(d1), gaussian2.at[:3].set(d2), t_arr) * (l_arr[:, None] <= l_limits)
 
     # double factorial array
@@ -107,7 +109,7 @@ def kinetic(l_arr, gaussian1, gaussian2, t_arr):
                                                 overlap(l_arr, gaussian1, gaussian2.at[4].set(gaussian2[4]+2), t_arr) +
                                                 overlap(l_arr, gaussian1, gaussian2.at[5].set(gaussian2[5]+2), t_arr) )
 
-    fac = gaussian2[3:6] * (gaussian[3:6] - 1)
+    fac = gaussian2[3:6] * (gaussian2[3:6] - 1)
     element += -0.5 * ( fac[0] * overlap(l_arr, gaussian1, gaussian2.at[3].set(gaussian2[3]-2), t_arr) +
                      fac[1] * overlap(l_arr, gaussian1, gaussian2.at[4].set(gaussian2[4]-2), t_arr) +
                      fac[2] * overlap(l_arr, gaussian1, gaussian2.at[5].set(gaussian2[5]-2), t_arr) )
@@ -263,13 +265,6 @@ def interaction(gaussian1, gaussian2, gaussian3, gaussian4, l_arr, t_arr):
     out = nuclear_convolve_second(a_arr[:,0], a_arr[:,1], a_arr[:,2])
     f_arr = boys_fun(l_range)
     return f @ out
-
-# convention used for built-in gaussian basis: tuples have the form (coefficients, alphas, lmn), where lmn is exponent of cartesian coordinates x,y,z
-sto_3g = {
-    "pz" : (jnp.array([ 0.155916, 0.607684, 0.391957 ]), 
-            jnp.array( [ 2.941249, 0.683483, 0.22229 ]),
-            jnp.array( [ 0,0,1 ]) )
-    }
 
 def nuclear_matrix(arr1, arr2, nuc):
 

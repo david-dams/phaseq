@@ -1,3 +1,9 @@
+# convention used for built-in gaussian basis: tuples have the form (coefficients, alphas, lmn), where lmn is exponent of cartesian coordinates x,y,z
+sto_3g = {
+    "pz" : (jnp.array([ 0.155916, 0.607684, 0.391957 ]), 
+            jnp.array( [ 2.941249, 0.683483, 0.22229 ]),
+            jnp.array( [ 0,0,1 ]) )
+    }
 
 def get_atomic_charge(atom):
     charges = {

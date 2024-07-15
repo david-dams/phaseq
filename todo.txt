@@ -6,3 +6,5 @@ test repulsion
 convenience functions for determining angular momentum arrays
 
 make double factorial nicer
+
+save time via lazy evaluation for a matrix => record (quantum numbers, positions) and compute only for unique elements

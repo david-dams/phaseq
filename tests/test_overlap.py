@@ -13,6 +13,9 @@ def test_primitive(tolerance = 1e-10):
     
     a1, l1, m1, n1, x1, y1, z1 =  0.2, 2, 1, 0, 0.2, 0.3, 0.1
     a2, l2, m2, n2, x2, y2, z2 =  0.1, 1, 1, 2, 10., 0.1, 0.5
+
+    a1, l1, m1, n1, x1, y1, z1 =  0.2, 4, 1, 0, 0.2, 0.3, 0.1
+    a2, l2, m2, n2, x2, y2, z2 =  0.1, 1, 1, 2, 10., 0.1, 0.5
     
     gaussian1 = jnp.array( [x1, y1, z1, l1, m1, n1, a1] )
     gaussian2 = jnp.array( [x2, y2, z2, l2, m2, n2, a2] )
@@ -48,3 +51,7 @@ def test_contracted(tolerance =  1e-10):
 
 if __name__ == '__main__':
     test_primitive()
+
+    from ref import *
+    ra, la, aa, rb, lb, ab, g, p, rap, rbp = pack_gaussian_pair(gaussian1, gaussian2)    
+    overlap_ref(a1, l1, m1, n1, p - gaussian1[:3], a2, l2, m2, n2, p - gaussian2[:3])
