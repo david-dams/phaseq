@@ -5,14 +5,7 @@ from jax.scipy.special import gammainc, gamma, factorial
 
 jax.config.update("jax_enable_x64", True)
 
-# TODO: unpacking primitive gaussians should happen in separate function
-# TODO: make function, precomputed values for factorial
-
 ### ELEMENTARY FUNCTIONS ###
-DOUBLE_FACTORIAL = jnp.array([1,1,2,3,8,15,48,105,384,945,3840,10395,46080,135135,645120,2027025])
-def double_factorial(n):
-    return
-    
 def boys_fun(index, arg):
     """computes the boys function for the specified index and scalar argument"""
     return gammainc(index+0.5, arg) * gamma(index+0.5) * 0.5 * jnp.pow(arg,-index-0.5) 
@@ -21,15 +14,15 @@ def binomial(n, m):
     return (n > 0) * (m > 0) * (n > m) * (factorial(n) / (factorial(n - m) * factorial(m)) - 1) + 1
 
 def binomial_prefactor(s_arr, gaussian1, gaussian2, t_arr):
-    """binomial prefactor array over a combined angular momentum range for two gaussians.
+    """binomial prefactor array. each element is computed for an "external" angular momentum by summing over a range of "internal"  angular momenta.
 
     Args:
-        s_arr : 
-        gaussian1, gaussian2 : 
-        t_arr :
+        s_arr : N-dim array; external angular momentum range
+        gaussian1, gaussian2 : array representation of gaussians containing 3-dim position vectors
+        t_arr : M-dim array; internal angular momentum range to be summed over
        
     Returns:
-         array of shape N x 3, where N is the size of s_arr and 3 is the Cartesian dimension
+        array of shape N x 3
     """
 
     # s x t dim array    
@@ -89,7 +82,7 @@ def overlap(l_arr, gaussian1, gaussian2, t_arr):
     # l x 3 array
     d1 = p - gaussian1[:3]
     d2 = p - gaussian2[:3]
-    b_arr = binomial_prefactor(2*l_arr, gaussian1.at[:3].set(d1), gaussian2.at[:3].set(d2), t_arr) * (l_arr[:, None] >= l_limits)
+    b_arr = binomial_prefactor(2*l_arr, gaussian1.at[:3].set(d1), gaussian2.at[:3].set(d2), t_arr) * (l_arr[:, None] <= l_limits)
 
     # double factorial array
     c_arr = gamma(l_arr+0.5) / (jnp.sqrt(jnp.pi) * jnp.pow(g, l_arr))
