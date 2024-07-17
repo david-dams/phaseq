@@ -9,9 +9,9 @@ jax.config.update("jax_enable_x64", True)
 def boys_fun(index, arg):
     """computes the boys function for the specified index and scalar argument"""
     return gammainc(index+0.5, arg) * gamma(index+0.5) * 0.5 * jnp.pow(arg,-index-0.5) 
-    
+
 def binomial(n, m):
-    return (n > 0) * (m > 0) * (n > m) * (factorial(n) / (factorial(n - m) * factorial(m)) - 1) + 1
+    return jnp.nan_to_num(factorial(n) / (factorial(n - m) * factorial(m)), posinf=1, neginf=1)
 
 def binomial_prefactor(s_arr, gaussian1, gaussian2, t_arr):
     """binomial prefactor array. each element is computed for an "external" angular momentum by summing over a range of "internal"  angular momenta.
@@ -167,7 +167,18 @@ def nuclear_pack(gaussian1, gaussian2, nuc, l_arr):
     rab2 = jnp.pow(jnp.linalg.norm(rb - ra), 2)
     prefac = 2*jnp.pi/g * jnp.exp(-aa*ab*rab2/g)
     
-    return a_arr, b_arr, jnp.nan_to_num(c_arr, posinf = 0, neginf = 0), g, prefac, rcp2
+    return a_arr, b_arr, jnp.nan_to_num(c_arr, posinf = 1, neginf = 1), g, prefac, rcp2
+
+# TODO: transform to conv with kernel
+def nuclear_inner_loop(lim, dimension, a_arr, b_arr, c_arr):
+    ret = [0.0] * lim
+    for i in range(lim):
+        for r in range(i//2+1):
+            for u in range((i-2*r)//2+1):        
+                I = i - 2*r - u
+                if I >= 0:
+                    ret[I] += float(a_arr[i, dimension] * b_arr[2*r] * c_arr[u, I, dimension])
+    return jnp.array(ret)
 
 def nuclear(gaussian1, gaussian2, nuc, l_arr):
     """nuclear potential term (single nucleus) between primitive gaussians.
@@ -186,28 +197,21 @@ def nuclear(gaussian1, gaussian2, nuc, l_arr):
     # "packing" layer    
     a_arr, b_arr, c_arr, g, prefac, rcp2 = nuclear_pack(gaussian1, gaussian2, nuc, l_arr)
 
-    # b * c
-    # first convolution N x N x 3, 2N => N x 3 x (3N - 1)
-    x = jax.vmap(lambda y : jax.vmap(lambda x : jnp.convolve(b_arr, x))(y.T))(c_arr)
+    # TODO: urgh
+    lmn = gaussian1[3:6] + gaussian2[3:6] + 1
+    gx_val = nuclear_inner_loop(int(lmn[0]), 0, a_arr, b_arr, c_arr)
+    gy_val = nuclear_inner_loop(int(lmn[1]), 1, a_arr, b_arr, c_arr)
+    gz_val = nuclear_inner_loop(int(lmn[2]), 2, a_arr, b_arr, c_arr)
 
-    # A = a . b * c
-    # second convolution N x 3 x (3N - 1), N x 3 => N x 3 x (4N - 2)
-    # vmapping over last axis of x and then Cartesian axis of x and a_arr
-    final_arrs = jax.vmap(lambda x1 : jax.vmap(jnp.convolve, in_axes=(0,0))(x1, a_arr.T) )(x)
-
-    # skip strictly positive indices N x 3 x (4N - 2) => 3 x N
-    final_arrs = jnp.diagonal(final_arrs[..., (x.shape[-1]-1):], axis1=0, axis2=2)
-
-    # final layer is convolution of cartesian arrays => N-dim
-    conv = jnp.convolve(final_arrs[0], jnp.convolve(final_arrs[1], final_arrs[2]))
+    conv = jnp.convolve(jnp.convolve(gx_val, gy_val), gz_val)
 
     # function array over unique range
     f_arr = boys_fun( jnp.arange(conv.size), rcp2 * g )
 
     # raw sum
-    res = f_arr @ (conv+1)
+    res = f_arr @ conv
 
-    return prefac * res
+    return -prefac * res
 
 ### INTERACTION ###
 def interaction_pack(gaussian1, gaussian2, gaussian3, gaussian4, nuc, l_arr, u_arr, u_t_arr):

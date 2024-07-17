@@ -1,7 +1,22 @@
-test overlap
-test kinetic
 test nuclear
 test repulsion
+
+test overlap contracted
+test kinetic contracted
+test nuclear contracted
+test repulsion contracted
+
+test overlap derivative
+test kinetic derivative
+test nuclear derivative
+test repulsion derivative
+
+test overlap contracted derivative
+test kinetic contracted derivative
+test nuclear contracted derivative
+test repulsion contracted derivative
+
+turn nuclear triple loop into masked convolution
 
 convenience functions for determining angular momentum arrays
 

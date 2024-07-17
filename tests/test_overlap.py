@@ -51,7 +51,3 @@ def test_contracted(tolerance =  1e-10):
 
 if __name__ == '__main__':
     test_primitive()
-
-    from ref import *
-    ra, la, aa, rb, lb, ab, g, p, rap, rbp = pack_gaussian_pair(gaussian1, gaussian2)    
-    overlap_ref(a1, l1, m1, n1, p - gaussian1[:3], a2, l2, m2, n2, p - gaussian2[:3])
