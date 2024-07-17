@@ -176,8 +176,7 @@ def nuclear_inner_loop(lim, dimension, a_arr, b_arr, c_arr):
         for r in range(i//2+1):
             for u in range((i-2*r)//2+1):        
                 I = i - 2*r - u
-                if I >= 0:
-                    ret[I] += float(a_arr[i, dimension] * b_arr[2*r] * c_arr[u, I, dimension])
+                ret[I] += float(a_arr[i, dimension] * b_arr[2*r] * c_arr[u, I, dimension])
     return jnp.array(ret)
 
 def nuclear(gaussian1, gaussian2, nuc, l_arr):
