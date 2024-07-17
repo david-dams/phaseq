@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phaseq"
+version = "0.0.1"
+authors = [
+  { name="David Dams", email="david.dams@kit.edu" },
+]
+description = "phaseq"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  'jax==0.4.26',
+  'jaxlib==0.4.26',
+]
