@@ -16,20 +16,38 @@ $H = T_{ab} Ab + V_{ab} Ab + U_{abcd} ABcd$
 
 where $T_{ab}, V_{ab}, U_{abcd}$ are the kinetic, nuclear and interaction matrix elements.
 
-The non-orthonormality of the basis can be taken into account via
+The non-orthonormality of the basis can be taken into account via the overlap matrix $S$ with elements
 
 $\{A,b\} = S_{ab}$
 
-The following non-recursive expressions for the matrix elements occuring in the expression above have been derived by [Takaeta et al.](https://csclub.uwaterloo.ca/~pbarfuss/jpsj.21.2313.pdf)
+Takaeta et al. (https://csclub.uwaterloo.ca/~pbarfuss/jpsj.21.2313.pdf) have derived non-recursive expressions for each of these
+matrices in a Gaussian basis. These expressions can be recast in terms of SIMD-friendly array-oriented programming as to play nice with JAX.
 
-TBD
+Loosely speaking, this means turning loops to JAX builtins, such as matrix products and convolutions.
 
-Where 
+In the following, we denote integer division by $i / 2$ for an integer index $i$.
 
-$f_j(l_1, l_2, a, b) = \partial^j_x (a+x)^{l_1} (a+x)^{l_2} \vert_{x=0}$
+* Primitive and Contracted Matrix Elements
+
+A basis vector $v_i$ of a Gaussian basis is represented by a linear combination of primitive Gaussians. A primitive Gaussian $p_i(\vec{\mu}, \sigma)$
+is a "normal 3D Gaussian", characterized by mean and standard deviation.
+
+$v_i = \sum_{j} c_{ij} p_j(\vec{\mu}, \sigma)$
+
+Here, $v$ is called "contracted".
+
+Consequently, the primitive and contracted one-electron matrix elements (a matrix with only two indices) are related by
+
+$M_v = C M_p C^T$
+
+And the two-electron matrix elements by
+
+$U_v = C U_p C^T$
+
+In the following, we discuss how to obtain array-oriented primitive matrix elements, suitable for promotion to contracted matrix elements.
 
 * Overlap
-The overlap integrals can be recast as follows
+The overlap matrix elements are given by
 
 $a \cdot \prod_i \sum_I b_I(l_1, l_2, \vec{d}_{AP}, \vec{d}_{BP}, i) c_I$
 
@@ -38,7 +56,8 @@ where
 \begin{align*}
 a &= \frac{\pi}{\gamma}^{3/2} e^{-\alpha_1 \alpha_2 \vec{d}_{AB}^2 / \gamma} \\
 b &= f_{2i}(l_1, l_2,\vec{d}_{i, AP}, \vec{d}_{i, BP} ) \\
-c_i &= \frac{(2i-1)!!}{(2 \gamma)^i}
+c_i &= \frac{(2i-1)!!}{(2 \gamma)^i} \\
+f_j(l_1, l_2, a, b) &= \partial^j_x (a+x)^{l_1} (a+x)^{l_2} \vert_{x=0}
 \end{align*}
 
 * Kinetic
@@ -53,21 +72,41 @@ where $\text{Conv}_3$ denotes the triple convolution operator
 
 $\text{Conv}_3 : a,b,c \rightarrow \text{Conv}[\text{Conv}[a,b],c]$
 
-The summation over $I$ ranges from $0$ to $l_1 + l_2 + m_1 + m_2 + n_1 + n_2 - 2$.
+The second group of nesting levels reads as
 
-The second group of nesting levels can be transformed upon redefining $d_{I, u} = d_{I-u}$ as follows
+$A_I = \sum\limits_{i-2r-u = I, r \leq i /2, u \leq i/2 - r} a_i b_r c_{I, u}$
 
-$A_I = \sum_{i-2r-u = I} a_i b_r c_u d_{i-2r-2u} = \text{Conv}_3[a, b', c'_I ]_I$
+with
 
-where $b'= \text{reverse}[\text{inflate}[b]], c'_I = \text{reverse}[c \odot d_{I}]$ and
 
 \begin{align*}
 a_i &= i! (-1)^if_i \\
 b_r(\epsilon) &= \frac{\epsilon^r}{r!} \\
 \epsilon &= \gamma / 4 \\
-c_u(\epsilon) &= \frac{(-1)^u \epsilon^u}{u!} \\
-d_{i-2r-2u}(p) &= \frac{p^{i-2r-2u}}{(i-2r-2u)!}
+c_{I, u}(p) &= \frac{p^{I - u}}{(I - u)!} \cdot f(u) \\
+f(u) &= \frac{(-1)^u \epsilon^u}{u!}
 \end{align*}
+
+Where $p$ is the vector from the nucleus to the product center $CP$. This can be simplified by defining
+
+\begin{align}
+v_{2r} &= b_r \\
+v_{2r + 1} &= 0
+\end{align}
+
+One obtains
+
+$e_L = \sum\limits_{i - j = L, j \leq i} a_i v_j = \sum\limits_{i, L \geq 0}a_i v_{i - L} = v_{L, i} a_i$
+
+And thus
+
+$A_I = \sum\limits_{L - u = I, u \leq L / 2} e_L d_{L, u} = \sum\limits_{L} d'_{I, L} e_L$
+
+Where
+
+$d'_{I, L} = \frac{p^{2I - L} (-1)^{L - I} \epsilon^{L - I}}{(2I - L)!(L - I)!}$
+
+is allowed non-zero entries only for $L/2 \geq L-I \geq 0$.
 
 * Interaction
 
@@ -122,4 +161,4 @@ where
 
 $e_{I, K} &= \frac{ K! (-)^{K-I} p_x^{2I - K}}{(K-I)!(2I -K)!\delta^{I}}$
 
-enters non-trivially only for $K-I = u \geq 0$.
+is allowed non-zero entries only for $K/2 \geq K-I \geq 0$.
