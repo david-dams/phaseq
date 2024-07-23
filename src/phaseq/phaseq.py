@@ -56,6 +56,36 @@ def pack_gaussian_pair(gaussian1, gaussian2):
 
     return ra, la, aa, rb, lb, ab, g, p, rap, rbp
 
+def kernel_to_matrix(kernel, imax):
+    """Reshapes the N-dim array `kernel` into a N x N matrix
+    
+    out = kernel @ signal
+
+    Is the output array of the discrete convolution.
+    """
+    # conditionally skip for odd total angular momnentum
+    rmax = imax // 2 + 1 if (imax % 2 == 1) else imax // 2
+    kernel = kernel[:rmax]
+    
+    # "inflate" g such that g[2*r] = g(r)
+    kernel = jnp.insert(arr = kernel, obj = jnp.arange(0, kernel.size) + 1, values = 0)
+
+    if imax % 2 == 1:
+        kernel = kernel[:-1]
+            
+    N = kernel.shape[0]
+    
+    # Create a 2D array of indices
+    row_indices = jnp.arange(N)[:, None]  # Shape: (N, 1)
+    col_indices = jnp.arange(N)[None, :]  # Shape: (1, n)
+    
+    # Compute the shifted indices
+    indices = col_indices - row_indices
+
+    # reshape g such that gs[L, i] = gs[i - L]
+    # Gather the elements using the shifted indices, masking out "wrap-around" indices
+    M = kernel[indices] * (indices >= 0)
+    return M
 
 ### OVERLAP ###
 def overlap(l_arr, gaussian1, gaussian2, t_arr):
@@ -121,132 +151,66 @@ def kinetic(l_arr, gaussian1, gaussian2, t_arr):
 
 
 ### NUCLEAR ###
-def nuclear_pack(gaussian1, gaussian2, nuc, l_arr):
-    """Packs gaussians and nuclear position into arrays    
+def nuclear_c_matrix(I_range, p, eps, L_range):
+    t1 = jnp.pow(-eps, L_range - I_range[:, None])
+    t2 = factorial(2*I_range[:, None] - L_range) * factorial(-I_range[:, None] + L_range)
+    t3 = jnp.pow(p[:, None, None], 2*I_range[:, None] - L_range)
+    return t1 * jnp.nan_to_num(t3/t2, posinf = 0, neginf = 0) * (I_range[:, None] >= L_range//2)
 
-    Args:
-        gaussian1, gaussian2 : array representations of primitive gaussians
-        l_arr : range of combined angular momenta from 0 to 2*l_max
-        nuc : 3 array, nucleus position
-
-    Returns:
-        a  : N x 3 array 
-        b' : N array 
-        c' : N x N x 3 array 
-        g : float
-    """
-
-    # pack gaussians
-    ra, la, aa, rb, lb, ab, g, p, rap, rbp = pack_gaussian_pair(gaussian1, gaussian2)
-
-    # derived quantity
-    eps = 1/(4*g)
-
-    # relative position of center and nucleus    
-    cp = p - nuc
-    rcp2 = jnp.pow(jnp.linalg.norm(cp), 2)
-
-    # N x 3 arr
-    d1 = p - gaussian1[:3]
-    d2 = p - gaussian2[:3]
-    a_arr = (factorial(l_arr) * jnp.pow(-1, l_arr))[:, None] * binomial_prefactor(l_arr, gaussian1.at[:3].set(d1), gaussian2.at[:3].set(d2), l_arr)
-
-    # N arr
-    b_arr = jnp.pow(eps, l_arr) * 1 / factorial(l_arr)
-
-    # TODO: size used => no JIT!
-    b_arr = jnp.insert(arr = b_arr, obj = jnp.arange(0, b_arr.size) + 1, values = 0)
-
-    # N arr
-    c_arr = jnp.pow(-1 * eps, l_arr) / factorial(l_arr)
-    
-    # M x N x 3 arr
-    d_arr = jax.vmap(jax.vmap(lambda I, u : jnp.pow(cp, I - u) / factorial(I - u), in_axes = (0, None)), in_axes=(None,0))(l_arr, l_arr)
-    
-    # M x N x 3 arr
-    c_arr = d_arr * c_arr[:, None, None]
-
-    # overall prefactor
-    rab2 = jnp.pow(jnp.linalg.norm(rb - ra), 2)
-    prefac = 2*jnp.pi/g * jnp.exp(-aa*ab*rab2/g)
-    
-    return a_arr, b_arr, jnp.nan_to_num(c_arr, posinf = 1, neginf = 1), g, prefac, rcp2
-
-# TODO: transform to conv with kernel
-def nuclear_inner_loop(lim, dimension, a_arr, b_arr, c_arr):
-    ret = [0.0] * lim
-    for i in range(lim):
-        for r in range(i//2+1):
-            for u in range((i-2*r)//2+1):        
-                I = i - 2*r - u
-                ret[I] += float(a_arr[i, dimension] * b_arr[2*r] * c_arr[u, I, dimension])
-    return jnp.array(ret)
-
-def nuclear(gaussian1, gaussian2, nuc, l_arr):
+def nuclear(gaussian1, gaussian2, nuc):
     """nuclear potential term (single nucleus) between primitive gaussians.
     
     Args:    
         gaussian1, gaussian2 : array representations of primitive gaussians
-        l_arr : range of angular momenta from 0 to 2*l_max
         nuc : 3 array, nucleus position
 
     Returns:
         float, overlap    
-    """
-    # the innermost loop is $r_{I \geq 0} = \sum_{i - j - k} a_i b'_j c'_k$
-    # this can be expressed as $r_{I \geq 0} = Conv[a, Conv[b', c']]_{I \geq 0}$
+    """    
+    # pack gaussians
+    ra, la, aa, rb, lb, ab, g, p, rap, rbp = pack_gaussian_pair(gaussian1, gaussian2)    
+    eps = 1/(4*g)
     
-    # "packing" layer    
-    a_arr, b_arr, c_arr, g, prefac, rcp2 = nuclear_pack(gaussian1, gaussian2, nuc, l_arr)
+    # relative position of center and nucleus    
+    cp = p - nuc
+    rcp2 = jnp.pow(jnp.linalg.norm(cp), 2)
 
-    # TODO: urgh
-    lmn = gaussian1[3:6] + gaussian2[3:6] + 1
-    gx_val = nuclear_inner_loop(int(lmn[0]), 0, a_arr, b_arr, c_arr)
-    gy_val = nuclear_inner_loop(int(lmn[1]), 1, a_arr, b_arr, c_arr)
-    gz_val = nuclear_inner_loop(int(lmn[2]), 2, a_arr, b_arr, c_arr)
+    # components of big vector
+    l_max = jnp.max(gaussian1[3:6] + gaussian2[3:6])
+    l_range = jnp.arange(l_max + 1) # size is l1 + l2 + 1
+    pa, pb = p - gaussian1[:3], p - gaussian2[:3]
+    bf1 = binomial_prefactor(l_range, gaussian1.at[:3].set(pa), gaussian2.at[:3].set(pb), l_range)
+    iterm = (factorial(l_range) * jnp.pow(-1, l_range))[:, None] * bf1
+    rterm = jnp.pow(eps, l_range) / factorial(l_range)
 
-    conv = jnp.convolve(jnp.convolve(gx_val, gy_val), gz_val)
+    # components of big matrix
+    c = nuclear_c_matrix(l_range, cp, eps, l_range)
+
+    # convolution
+    As = []
+    
+    for i in range(3):
+        lim = int(gaussian1[3:6][i] + gaussian2[3:6][i]) + 1
+        v = iterm[:lim, i]
+        a = kernel_to_matrix(rterm, v.size) @ v
+
+        res = c[i, :a.size, :a.size] @ a
+        As.append(res)
+
+    conv = jnp.convolve(jnp.convolve(As[0], As[1]), As[2])
 
     # function array over unique range
     f_arr = boys_fun( jnp.arange(conv.size), rcp2 * g )
 
     # raw sum
     res = f_arr @ conv
-
+    
+    rab2 = jnp.pow(jnp.linalg.norm(rb - ra), 2)
+    prefac = 2*jnp.pi/g * jnp.exp(-aa*ab*rab2/g)
+    
     return -prefac * res
 
-### INTERACTION ###
-def kernel_to_matrix(kernel, imax):
-    """Reshapes the N-dim array `kernel` into a N x N matrix
-    
-    out = kernel @ signal
-
-    Is the output array of the discrete convolution.
-    """
-    # conditionally skip for odd total angular momnentum
-    rmax = imax // 2 + 1 if (imax % 2 == 1) else imax // 2
-    kernel = kernel[:rmax]
-    
-    # "inflate" g such that g[2*r] = g(r)
-    kernel = jnp.insert(arr = kernel, obj = jnp.arange(0, kernel.size) + 1, values = 0)
-
-    if imax % 2 == 1:
-        kernel = kernel[:-1]
-            
-    N = kernel.shape[0]
-    
-    # Create a 2D array of indices
-    row_indices = jnp.arange(N)[:, None]  # Shape: (N, 1)
-    col_indices = jnp.arange(N)[None, :]  # Shape: (1, n)
-    
-    # Compute the shifted indices
-    indices = col_indices - row_indices
-
-    # reshape g such that gs[L, i] = gs[i - L]
-    # Gather the elements using the shifted indices, masking out "wrap-around" indices
-    M = kernel[indices] * (indices >= 0)
-    return M
-    
+### INTERACTION ###    
 def interaction_d_matrix(K_range, I_range, p, delta):
     """computes the matrix: $e_{I, K} &= \frac{ K! (-)^{K-I} p_x^{2I - K}}{(K-I)!(2I -K)!\delta^{I}}$"""
 
