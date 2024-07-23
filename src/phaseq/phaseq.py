@@ -8,6 +8,7 @@ jax.config.update("jax_enable_x64", True)
 ### ELEMENTARY FUNCTIONS ###
 def boys_fun(index, arg):
     """computes the boys function for the specified index and scalar argument"""
+    arg += (jnp.abs(arg) < 0.00000001) * 0.00000001
     return gammainc(index+0.5, arg) * gamma(index+0.5) * 0.5 * jnp.pow(arg,-index-0.5) 
 
 def binomial(n, m):
@@ -55,6 +56,7 @@ def pack_gaussian_pair(gaussian1, gaussian2):
 
     return ra, la, aa, rb, lb, ab, g, p, rap, rbp
 
+
 ### OVERLAP ###
 def overlap(l_arr, gaussian1, gaussian2, t_arr):
     """overlap between primitive gaussians
@@ -90,7 +92,8 @@ def overlap(l_arr, gaussian1, gaussian2, t_arr):
     c_arr = gamma(l_arr+0.5) / (jnp.sqrt(jnp.pi) * jnp.pow(g, l_arr))
 
     return a * (b_arr * c_arr[:, None]).sum(axis=0).prod()
-    
+
+
 ### KINETIC ###
 def kinetic(l_arr, gaussian1, gaussian2, t_arr):
     """laplace operator between primitive gaussians. decomposes into overlaps and is just dumbly implemented as such.    
@@ -213,69 +216,130 @@ def nuclear(gaussian1, gaussian2, nuc, l_arr):
     return -prefac * res
 
 ### INTERACTION ###
-def interaction_pack(gaussian1, gaussian2, gaussian3, gaussian4, nuc, l_arr, u_arr, u_t_arr):
-    """Packs gaussians and nuclear position into arrays    
+def kernel_to_matrix(kernel, imax):
+    """Reshapes the N-dim array `kernel` into a N x N matrix
+    
+    out = kernel @ signal
 
-    Args:
-        gaussian1, gaussian2, gaussian3, gaussian4 : array representations of primitive gaussians
-        l_arr : range of angular momenta, precomputed before simulation
-        t_arr : dummy array for summation, must range from 2*min(l_arr) to 2*max(l_arr), precomputed before simulation
-        nuc : array holding nuclear position
-
-    Returns:
-        alpha : N array containing the inverse factorial
-        beta' : N x 3 array containing the binomial prefactor scaled with the factorial
-        gamma : N - array containing a combinatorial factor
-        c : N x m x 3 array containing multinomial geometric factor
+    Is the output array of the discrete convolution.
     """
+    # conditionally skip for odd total angular momnentum
+    rmax = imax // 2 + 1 if (imax % 2 == 1) else imax // 2
+    kernel = kernel[:rmax]
     
-    eps = 1/(4*g)
+    # "inflate" g such that g[2*r] = g(r)
+    kernel = jnp.insert(arr = kernel, obj = jnp.arange(0, kernel.size) + 1, values = 0)
+
+    if imax % 2 == 1:
+        kernel = kernel[:-1]
+            
+    N = kernel.shape[0]
     
-    # TODO: what args?
-    a = factorial(u_arr) * jnp.pow(-1, l_range) * binomial_prefactor(gaussian1, gaussian2, u_arr, u_t_arr)
+    # Create a 2D array of indices
+    row_indices = jnp.arange(N)[:, None]  # Shape: (N, 1)
+    col_indices = jnp.arange(N)[None, :]  # Shape: (1, n)
     
-    b = jnp.pow(eps, u_arr) * 1 / factorial(u_arr)
-    b = jnp.insert(arr = b, obj = jnp.arange(0, b.size, 2), values = 0)[::-1]
+    # Compute the shifted indices
+    indices = col_indices - row_indices
 
-    c = jnp.pow(-1 * eps, u_arr) / factorial(u_arr)
-
-    d = jax.vmap(lambda I, u : jnp.pow(p, I - u) / factorial(I - u), l_arr, u_arr)
-
-    c = d * c[None,:]
+    # reshape g such that gs[L, i] = gs[i - L]
+    # Gather the elements using the shifted indices, masking out "wrap-around" indices
+    M = kernel[indices] * (indices >= 0)
+    return M
     
-    return a, b, c[:, ::-1]
+def interaction_d_matrix(K_range, I_range, p, delta):
+    """computes the matrix: $e_{I, K} &= \frac{ K! (-)^{K-I} p_x^{2I - K}}{(K-I)!(2I -K)!\delta^{I}}$"""
 
-def interaction(gaussian1, gaussian2, gaussian3, gaussian4, l_arr, t_arr):
-    """interaction term between primitive gaussians
+    t1 = factorial(K_range) / jnp.pow(delta, I_range)[:, None]
+    t2 =  factorial(2*I_range[:, None] - K_range) * factorial(K_range - I_range[:, None]) 
+    t3 = jnp.pow(-1, K_range - I_range[:, None]) * jnp.pow(p[:, None, None], 2*I_range[:, None] - K_range)
 
-    Args:
-        l_arr : range of angular momenta, precomputed before simulation
-        gaussian1, gaussian2 : array representations of primitive gaussians
-        t_arr : dummy array for summation, must range from 2*min(l_arr) to 2*max(l_arr), precomputed before simulation
-        nuc : array holding nuclear position
+    return t1 * t3 * jnp.nan_to_num(1/t2, posinf = 0, neginf = 0)
     
-    Returns:
-       float
-    """
+def interaction(gaussian1, gaussian2, gaussian3, gaussian4):    
+    # unpack gaussians
+    a1, a2 = gaussian1[-1], gaussian2[-1]
+    a3, a4 = gaussian3[-1], gaussian4[-1]
 
-    # first layer: unpack
-    alpha, beta, gamma, c = pack_interaction()
-
-    # second layer: convolution and hadamard product
-    a_arr = gamma * jax.vmap(nuclear_convolve_first)(alpha, beta)
-
-    # third layer: convolution and dot product
-    out = nuclear_convolve_second(a_arr[:,0], a_arr[:,1], a_arr[:,2])
-    f_arr = boys_fun(l_range)
-    return f @ out
-
-def nuclear_matrix(arr1, arr2, nuc):
-
-    gaussian1 = jnp.concatenate( [arr1, jnp.array( [1, 0, 0, 0.1] )] )
-    gaussian2 = jnp.concatenate( [arr2, jnp.array( [1, 0, 0, 0.1] )] )
-
-    # array of combined angular momenta
-    l_max = 1 #max(gaussian1[3:6].max(), gaussian2[3:6].max()) 
-    l_arr = jnp.arange(2*l_max+1)
+    # gaussian centers
+    gamma1 = a1 + a2
+    p = (a1 * gaussian1[:3] + a2 * gaussian2[:3]) / gamma1
+    gamma2 = a3 + a4
+    q = (a3 * gaussian3[:3] + a4 * gaussian4[:3]) / gamma2
+    delta = 1/(4*gamma1) + 1/(4*gamma2)
     
-    return nuclear(gaussian1, gaussian2, nuc, l_arr)
+    # distance center-center
+    center_center = q - p
+
+    # for each direction (x,y,z) we have one loop over indices.
+    # this loop runs as follows
+    # 0 <= i1 <= l1 + l2
+    # 0 <= i2 <= l3 + l4
+    # 0 <= r1 <= i1 // 2
+    # 0 <= r2 <= i2 // 2
+    # 0 <= u <= (i1+i2)//2 - 2(r1+r2)
+    # where li is i-th the angular momentum in x (or y,z).
+    # The loop can be written as a function T as follows
+    # T(I) = sum_{i1 + i2 - 2(r1 + r2) - u = I} a(i1, r1) b(i2, r2) c(i1 + i2 - 2(r1 + r2), u)
+    # we can replace the a, b functions with a vector B and reshape the c function into a square matrix to arrive at
+    # T(I) = \sum_K A_{I, K} B_K => T = A @ B
+    # where T is a vector of size l1 + l2 + l3 + l4 + 1
+        
+    # precompute arrays for the big vector B
+    # this vector is computed as the convolution of two arrays a, b of shape l1 + l2 + 1, l3 + l4 + 1
+    # we precompute quantities over the largest index range, given by max(l1+l2, m1+m2, n1+n2) + 1
+
+    # precompute for a array
+    l_max1 = jnp.max(gaussian1[3:6] + gaussian2[3:6])
+    l_range = jnp.arange(l_max1 + 1) # size is l1 + l2 + 1
+    pa, pb = p - gaussian1[:3], p - gaussian2[:3]
+    bf1 = binomial_prefactor(l_range, gaussian1.at[:3].set(pa), gaussian2.at[:3].set(pb), l_range)
+    facgamma1 = factorial(l_range) / jnp.pow(4*gamma1, l_range)
+    rterm1 = 1/facgamma1
+    iterm1 = facgamma1[:, None] * bf1
+    fac1 = 1 / factorial(l_range)
+
+    # precompute for b array
+    l_max2 = jnp.max(gaussian3[3:6] + gaussian4[3:6])
+    l_range = jnp.arange(l_max2 + 1)
+    qc, qd = q - gaussian3[:3], q - gaussian4[:3]
+    bf2 = binomial_prefactor(l_range, gaussian3.at[:3].set(qc), gaussian4.at[:3].set(qd), l_range)
+    facgamma2 = factorial(l_range) / jnp.pow(4*gamma2, l_range)    
+    rterm2 = 1/facgamma2
+    iterm2 = (facgamma2 * jnp.pow(-1, l_range))[:, None] * bf2
+    fac2 = 1 / factorial(l_range)
+    
+    # precompute the matrix A
+    K_range = jnp.arange(l_max1 + l_max2 + 1) # size is l1 + l2 + l3 + l4 + 1
+    I_range = jnp.arange(l_max1 + l_max2 + 1)
+    d = interaction_d_matrix(K_range, I_range, center_center, delta)
+
+    # convolution
+    As = []
+
+    # loop over cartesian axes
+    for i in range(3):
+        lim = int(gaussian1[3:6][i] + gaussian2[3:6][i]) + 1
+        v = iterm1[:lim, i]
+        a = fac1[:v.size] * (kernel_to_matrix(rterm1, v.size) @ v)
+
+        lim = int(gaussian3[3:6][i] + gaussian4[3:6][i]) + 1
+        v = iterm2[:lim, i]
+        b = fac2[:v.size] * (kernel_to_matrix(rterm2, v.size) @ v)
+
+        c = jnp.convolve(a, b)
+        res = d[i, :c.size, :c.size] @ c
+        As.append(res)
+        
+    conv = jnp.convolve(As[0], jnp.convolve(As[1], As[2]))
+    
+    # Boys-function
+    arg = jnp.linalg.norm(p-q)**2 / (4 * delta)
+    f_arr = boys_fun( jnp.arange(conv.size), arg )
+
+    # global prefactor
+    rab2 = jnp.linalg.norm(gaussian1[:3]-gaussian2[:3])**2
+    rcd2 = jnp.linalg.norm(gaussian3[:3]-gaussian4[:3])**2
+    prefac = 2.0 * jnp.pow(jnp.pi, 2.5) / (gamma1 * gamma2 * jnp.sqrt(gamma1 + gamma2)) * jnp.exp(-a1*a2*rab2/gamma1) * jnp.exp(-a3*a4*rcd2/gamma2)
+
+    return prefac * (f_arr @ conv)
