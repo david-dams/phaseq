@@ -253,8 +253,8 @@ def interaction_d_matrix(K_range, I_range, p, delta):
     t1 = factorial(K_range) / jnp.pow(delta, I_range)[:, None]
     t2 =  factorial(2*I_range[:, None] - K_range) * factorial(K_range - I_range[:, None]) 
     t3 = jnp.pow(-1, K_range - I_range[:, None]) * jnp.pow(p[:, None, None], 2*I_range[:, None] - K_range)
-
-    return t1 * t3 * jnp.nan_to_num(1/t2, posinf = 0, neginf = 0)
+    
+    return t1 * jnp.nan_to_num(t3/t2, posinf = 0, neginf = 0)
     
 def interaction(gaussian1, gaussian2, gaussian3, gaussian4):    
     # unpack gaussians
