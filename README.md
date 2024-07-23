@@ -19,6 +19,10 @@ The following non-recursive expressions for the matrix elements occuring in the 
 
 TBD
 
+Where 
+
+$f_j(l_1, l_2, a, b) = \partial^j_x (a+x)^{l_1} (a+x)^{l_2} \vert_{x=0}$
+
 In preparation of the following sections, we introduce the following definitions for operations on a sequence $a$ of length $I$
 
 $\text{reverse} : a \to b, b_i = a_{I-i}$
@@ -76,33 +80,57 @@ The first group of nesting levels can be written as
 
 $\sum_{ijk} A_i B_j C_k F_{i+j+k} = \sum_I F_I \sum_{i+j+k=I} A_i B_j C_k = \sum_I F_I \text{Conv}_3[A,B,C]_I$
 
-where $\text{Conv}_3$ denotes the triple convolution operator.
+where $\text{Conv}_3$ denotes the triple convolution operator and $A, B, C$ correspond to $x, y, z$ quantities and $F_I = F(I, \overline{PQ}^2 / (\gamma_1 + \gamma_2))$
 
-The second group of nesting levels can be transformed to be
-   
-$A_I = \sum_{l+m+n = I} a_l b_m c_{l+m+n,n} = \text{Conv}_3[a,b,c_I]_{I}$
+The second group of nesting levels reads as
 
-where
+$A_I = \sum\limits_{r_1 \leq i_1 / 2, r_2 \leq i_2 / 2, u  \leq (i_1 + i_2)/2 - r_1 - r_2}^{i_1 + i_2 - 2(r_1 + r_2) - u = I} a_{i_1, r_1} b_{i_2, r_2} d_{I + u, u}$, 
+
+where 
+
 $
-\begin{align*}
-a_l &= a_l(l_1, l_2, pa, pb, g_1) \\
-b_m &= (-1)^m a_m(l_3, l_4, qc, qd, g_2) \\
-c_{l+m+n,n}(p) &= \frac{(l+m)! p^{l+m+2n}(-1)^{-n}}{n!(l+m+2n)! \delta^{l+m+n}}
-\end{align*}
+\begin{align}
+a_{i_1, r_1} &= \frac{f_{i_1} i_1!}{r_1! (i_1 - 2 r_1)! (4 \gamma_1)^{i_1 - r_1}} \\
+b_{i_2, r_2} &= \frac{(-)^{i_2} f_{i_2} i_2!}{r_2! (i_2 - 2 r_2)! (4 \gamma_2)^{i_2 - r_2}} \\
+d_{I + u, u} &= \frac{ (I + u)! (-)^u p_x^{I - u}}{u!(I-u)!\delta^{I}}
+\end{align}
 $
 
-Finally, the third group of nesting levels can be recast to
+where $f_{i_1} = f(i_1, \overline{PA}_x, \overline{PB}_x), f_{i_2} = f(i_2, \overline{QC}_x, \overline{QD}_x)$ refers to the
+binomial prefactors of the gaussian pairs with respect to their centers and $p_x$  is the center-center distance $Q-P$ and $\delta = \frac{1}{4 \gamma_1} + \frac{1}{4 \gamma_2}$. We now rewrite
 
-$a_I = \sum_{i-2j = I} \alpha_i \beta_j \gamma_{i-2j} = \gamma_{I} \sum_{i-2j=I} \alpha_{i} \beta_{j} = \gamma_{I} \text{Conv}[\alpha, \beta']_I$
+$
+\begin{align}
+a_L &= \frac{1}{L!}\sum\limits_{r_1 \leq i_1 / 2}^{i_1 - 2r_1 = L} \frac{f_{i_1} i_1!}{(4 \gamma_1)^{i_1}} \frac{(4 \gamma_1)^{r_1}}{r_1!}\\
+b_M &= \frac{1}{M!}\sum\limits_{r_2 \leq i_2 / 2}^{i_2 - 2r_2 = M} (-)^{i_2} \frac{f_{i_2} i_2!}{(4 \gamma_2)^{i_2}} \frac{(4 \gamma_2)^{r_2}}{r_2!} 
+\end{align}
+$
 
-where
+Due to the sums in the first and second line being restricted, they can not be directly translated to cross-correlations.
+Instead, one can write
 
-$\alpha_i = \frac{1}{i!}$
-$\beta' = \text{reverse}[\text{inflate}[\beta]]$
-$\beta_j(l_1, l_2, a, b) = j! f_j(l_1, l_2, a, b)$
-$\gamma_{i-2j}(g) = \frac{1}{(i-2j)! (4g)^{i-2j}}$
-$f_j(l_1, l_2, a, b) = \partial^j_x (a+x)^{l_1} (a+x)^{l_2} \vert_{x=0}$
+$
+\begin{align}
+v_{2r_1} &= \frac{1}{r_1! (4 \gamma_1)^{r_1}} \\
+v_{2r_1 + 1} &= 0 \\
+w_{i} &=  f_{i} i! (4 \gamma_1)^{i} 
+\end{align}
+$
 
-The binomial prefactor $f_j$ may be expressed as a slightly awkward masked dot product
+To obtain
 
-$f_s(l_1, l_2, a, b) = \sum\limits_{s-l_1 \leq t \leq l_2, t \leq s + 1} \lambda_{t}(l_1, a) \lambda_{s - t}(l_2, b) = \text{Conv}[\zeta, \sigma]_s$
+$a_L L! = \sum\limits_{j \leq i}^{i - j = L} w_{i} v_j = \sum\limits_{i, L \geq 0} w_{i} v_{i - L} \equiv \sum_i v_{L, i} w_i$
+
+by promoting $v$ to a matrix. The rewriting for $b$ proceeds analogously. Then, defining 
+
+$
+\begin{align}
+c_K &= \sum\limits_{L + M = K} a_L b_M = \text{Conv}[a, b]_K
+\end{align}
+$
+
+we can write
+$A_I = \sum\limits_{L + M - u = I} a_L b_M d_{I + u, u} = \sum\limits_{u \leq K}^{K - u = I} c_K d_{K, u} = \sum\limits_{I \geq 0}^{K} c_K d_{K, K - I} \equiv \sum\limits_{K} e_{I, K} c_K$
+where 
+
+$e_{I, K} &= \frac{ K! (-)^{K-I} p_x^{2I - K}}{(K-I)!(2I -K)!\delta^{I}}$
