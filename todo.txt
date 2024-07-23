@@ -1,5 +1,4 @@
 test nuclear
-test repulsion
 
 test overlap contracted
 test kinetic contracted
@@ -16,10 +15,6 @@ test kinetic contracted derivative
 test nuclear contracted derivative
 test repulsion contracted derivative
 
-turn nuclear triple loop into masked convolution
-
-convenience functions for determining angular momentum arrays
-
-make double factorial nicer
+restore JIT compatibility
 
 save time via lazy evaluation for a matrix => record (quantum numbers, positions) and compute only for unique elements
