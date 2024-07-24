@@ -30,7 +30,7 @@ def test_primitive(tolerance = 1e-10):
     gto3 = gto(1., [x3, y3, z3], a3, l3, m3, n3)
     gto4 = gto(1., [x4, y4, z4], a4, l4, m4, n4)
 
-    ref = integrator.interaction_gto(gto1, gto2, gto3, gto4)
+    ref = integrator.repulsion_gto(gto1, gto2, gto3, gto4)
 
     print(abs(ref - val))
 
