@@ -9,9 +9,9 @@ from phaseq import *
 # phaseq : [pos, lmn, alpha]
 
 def test_primitive(tolerance = 1e-10):
-    """test primitive gaussian kinetics"""
+    """test primitive gaussian kinetic"""
     
-    a1, l1, m1, n1, x1, y1, z1 =  0.2, 4, 1, 0, 0.2, 0.3, 0.1
+    a1, l1, m1, n1, x1, y1, z1 =  0.2, 4, 1, 2, 0.2, 0.3, 0.1
     a2, l2, m2, n2, x2, y2, z2 =  0.1, 1, 1, 2, 10., 0.1, 0.5
     
     gaussian1 = jnp.array( [x1, y1, z1, l1, m1, n1, a1] )
@@ -21,9 +21,9 @@ def test_primitive(tolerance = 1e-10):
     l_arr = jnp.arange(l_max+2)
     t_arr = jnp.arange(2*l_max+2)   
     
-    val11 = kinetic(l_arr, gaussian1, gaussian1, t_arr)
-    val12 = kinetic(l_arr, gaussian1, gaussian2, t_arr)
-    val22 = kinetic(l_arr, gaussian2, gaussian2, t_arr)
+    val11 = kinetic(gaussian1, gaussian1, l_arr, t_arr)
+    val12 = kinetic(gaussian1, gaussian2, l_arr, t_arr)
+    val22 = kinetic(gaussian2, gaussian2, l_arr, t_arr)
     
     integrator = PyQInt()
 

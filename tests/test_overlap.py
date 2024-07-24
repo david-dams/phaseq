@@ -24,9 +24,9 @@ def test_primitive(tolerance = 1e-10):
     l_arr = jnp.arange(l_max)
     t_arr = jnp.arange(2*l_max+1)   
     
-    val11 = overlap(l_arr, gaussian1, gaussian1, t_arr)
-    val12 = overlap(l_arr, gaussian1, gaussian2, t_arr)
-    val22 = overlap(l_arr, gaussian2, gaussian2, t_arr)
+    val11 = overlap(gaussian1, gaussian1, l_arr, t_arr)
+    val12 = overlap(gaussian1, gaussian2, l_arr, t_arr)
+    val22 = overlap(gaussian2, gaussian2, l_arr, t_arr)
     
     integrator = PyQInt()
 

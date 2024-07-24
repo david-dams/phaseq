@@ -1,4 +1,3 @@
-import time
 import jax
 import jax.numpy as jnp
 from jax.scipy.special import gammainc, gamma, factorial
@@ -88,7 +87,7 @@ def kernel_to_matrix(kernel, imax):
     return M
 
 ### OVERLAP ###
-def overlap(l_arr, gaussian1, gaussian2, t_arr):
+def overlap(gaussian1, gaussian2, l_arr, t_arr):
     """overlap between primitive gaussians
 
     in abstract terms, the overlap graph is a "packing layer" transforming primitive gaussians into arrays fed into a "contraction layer"
@@ -125,27 +124,27 @@ def overlap(l_arr, gaussian1, gaussian2, t_arr):
 
 
 ### KINETIC ###
-def kinetic(l_arr, gaussian1, gaussian2, t_arr):
+def kinetic(gaussian1, gaussian2, l_arr, t_arr):
     """laplace operator between primitive gaussians. decomposes into overlaps and is just dumbly implemented as such.    
     
     Args:
-        l_arr : range of angular momenta, precomputed before simulation
         gaussian1, gaussian2 : array representations of primitive gaussians
+        l_arr : range of angular momenta, precomputed before simulation
         t_arr : dummy array for summation, must range from 2*min(l_arr-2) to 2*max(l_arr+2), precomputed before simulation
 
     Returns:
         float, kinetic matrix elements
     """    
-    element = gaussian2[-1] * (2.0 * gaussian2[3:6].sum() + 3.0) * overlap(l_arr, gaussian1, gaussian2, t_arr)
+    element = gaussian2[-1] * (2.0 * gaussian2[3:6].sum() + 3.0) * overlap(gaussian1, gaussian2, l_arr, t_arr)
     
-    element += -2.0 * jnp.pow(gaussian2[-1], 2) * (overlap(l_arr, gaussian1, gaussian2.at[3].set(gaussian2[3]+2), t_arr) +
-                                                overlap(l_arr, gaussian1, gaussian2.at[4].set(gaussian2[4]+2), t_arr) +
-                                                overlap(l_arr, gaussian1, gaussian2.at[5].set(gaussian2[5]+2), t_arr) )
+    element += -2.0 * jnp.pow(gaussian2[-1], 2) * (overlap(gaussian1, gaussian2.at[3].set(gaussian2[3]+2), l_arr, t_arr) +
+                                                overlap(gaussian1, gaussian2.at[4].set(gaussian2[4]+2), l_arr, t_arr) +
+                                                overlap(gaussian1, gaussian2.at[5].set(gaussian2[5]+2), l_arr, t_arr) )
 
     fac = gaussian2[3:6] * (gaussian2[3:6] - 1)
-    element += -0.5 * ( fac[0] * overlap(l_arr, gaussian1, gaussian2.at[3].set(gaussian2[3]-2), t_arr) +
-                     fac[1] * overlap(l_arr, gaussian1, gaussian2.at[4].set(gaussian2[4]-2), t_arr) +
-                     fac[2] * overlap(l_arr, gaussian1, gaussian2.at[5].set(gaussian2[5]-2), t_arr) )
+    element += -0.5 * ( fac[0] * overlap(gaussian1, gaussian2.at[3].set(gaussian2[3]-2), l_arr, t_arr) +
+                     fac[1] * overlap(gaussian1, gaussian2.at[4].set(gaussian2[4]-2), l_arr, t_arr) +
+                     fac[2] * overlap(gaussian1, gaussian2.at[5].set(gaussian2[5]-2), l_arr, t_arr) )
 
     return element
 
@@ -307,3 +306,11 @@ def interaction(gaussian1, gaussian2, gaussian3, gaussian4):
     prefac = 2.0 * jnp.pow(jnp.pi, 2.5) / (gamma1 * gamma2 * jnp.sqrt(gamma1 + gamma2)) * jnp.exp(-a1*a2*rab2/gamma1) * jnp.exp(-a3*a4*rcd2/gamma2)
 
     return prefac * (f_arr @ conv)
+
+### CONTRACTIONS ###
+def one_particle(gaussians, func, coeffs):
+    return coeffs @ func(gaussians) @ coeffs.T
+
+def two_particle(gaussians, func, coeffs):
+    return jnp.einsum('ai,bj,ck,dl,ijkl->abcd', coeffs, coeffs, coeffs, coeffs, func(gaussians))
+
