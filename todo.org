@@ -1,0 +1,24 @@
+* checks
+test overlap contracted
+test kinetic contracted
+test nuclear contracted
+test interaction contracted
+
+test overlap derivative
+test kinetic derivative
+test nuclear derivative
+test interaction derivative
+
+test overlap contracted derivative
+test kinetic contracted derivative
+test nuclear contracted derivative
+test interaction contracted derivative    
+
+** JIT
++ add nuclear, interaction
++ make overlap, kinetic more transparent
+
+* Performance
++ right now: matrix = f_coefficients . f_primitive primitive_gaussians contraction_coefficients
++ Incorporate symmetries
++ can this be made more nicely useable?
