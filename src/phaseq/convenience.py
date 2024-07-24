@@ -1,9 +1,54 @@
+import jax
+import jax.numpy as jnp
+
+from phaseq import *
+
 # convention used for built-in gaussian basis: tuples have the form (coefficients, alphas, lmn), where lmn is exponent of cartesian coordinates x,y,z
 sto_3g = {
     "pz" : (jnp.array([ 0.155916, 0.607684, 0.391957 ]), 
             jnp.array( [ 2.941249, 0.683483, 0.22229 ]),
             jnp.array( [ 0,0,1 ]) )
     }
+
+def promote_one(f):
+    """one electron matrix element promotion"""
+    def element(coeff1, coeff2, g1, g2):        
+        c1 = get_norms_coefficients(g1, coeff1)
+        c2 = get_norms_coefficients(g2, coeff2)        
+        return jnp.einsum('k,l,kl->', c1, c2, f_vmapped(g2, g1))
+    
+    f_vmapped = jax.vmap(jax.vmap(lambda g1, g2 : f(g1, g2), (0, None), 0), (None, 0), 0)
+    
+    return element
+
+def promote_two(f):
+    """two electron matrix element promotion"""
+    def element(coeff1, coeff2, coeff3, coeff4, g1, g2, g3, g4):
+        c1 = get_norms_coefficients(g1, coeff1)
+        c2 = get_norms_coefficients(g2, coeff2)
+        c3 = get_norms_coefficients(g3, coeff3)
+        c4 = get_norms_coefficients(g4, coeff4)
+        
+        return jnp.einsum('i,j,k,l,ijkl->', c1, c2, c3, c4, f_vmapped(g1, g2, g3, g4))
+    
+    f_vmapped = jax.vmap(jax.vmap(lambda g1, g2, g3, g4 : f(g1, g2, g3, g4), (0, None), 0), (None, 0), 0)
+    
+    return element
+
+def get_norms_coefficients(gaussians, expansion):
+    """Computes the exact coefficients needed for converting primtive to contracted gaussian matrix elements. These simply include the norms of the primitive Gaussians.
+    
+    Args: 
+
+       gaussians : N x 7 array of primitive gaussians
+       expansion : N - array of basis coefficients     
+
+    Returns:
+    
+       N - array of norms * expansion
+    """
+    return expansion * jax.vmap(norm, (0,))(gaussians)
+        
 
 def get_atomic_charge(atom):
     charges = {
