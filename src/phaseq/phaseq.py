@@ -86,6 +86,12 @@ def kernel_to_matrix(kernel, imax):
     M = kernel[indices] * (indices >= 0)
     return M
 
+def norm(gaussian):
+    nom = jnp.pow(2.0, 2.0 * gaussian[3:6].sum() + 1.5) * jnp.pow(gaussian[-1], gaussian[3:6].sum() + 1.5)
+    # (2n - 1)!! = 2**n * G(n + 0.5) / sqrt(pi)
+    denom = jnp.prod(jnp.pow(2.0, gaussian[3:6])*gamma(gaussian[3:6] + 0.5) / jnp.sqrt(jnp.pi)) * jnp.pow(jnp.pi, 1.5)
+    return jnp.sqrt(nom / denom)
+
 ### OVERLAP ###
 def overlap(gaussian1, gaussian2, l_arr, t_arr):
     """overlap between primitive gaussians
@@ -117,7 +123,7 @@ def overlap(gaussian1, gaussian2, l_arr, t_arr):
     # in the loopy formulation, we sum over 2*i => array, where arr[i] ~ f(2*i)
     b_arr = binomial_prefactor(2*l_arr, gaussian1.at[:3].set(d1), gaussian2.at[:3].set(d2), t_arr) * (l_arr[:, None] <= l_limits)
 
-    # double factorial array
+    # double factorial array divided by 2**i    
     c_arr = gamma(l_arr+0.5) / (jnp.sqrt(jnp.pi) * jnp.pow(g, l_arr))
 
     return a * (b_arr * c_arr[:, None]).sum(axis=0).prod()
@@ -306,11 +312,3 @@ def interaction(gaussian1, gaussian2, gaussian3, gaussian4):
     prefac = 2.0 * jnp.pow(jnp.pi, 2.5) / (gamma1 * gamma2 * jnp.sqrt(gamma1 + gamma2)) * jnp.exp(-a1*a2*rab2/gamma1) * jnp.exp(-a3*a4*rcd2/gamma2)
 
     return prefac * (f_arr @ conv)
-
-### CONTRACTIONS ###
-def one_particle(gaussians, func, coeffs):
-    return coeffs @ func(gaussians) @ coeffs.T
-
-def two_particle(gaussians, func, coeffs):
-    return jnp.einsum('ai,bj,ck,dl,ijkl->abcd', coeffs, coeffs, coeffs, coeffs, func(gaussians))
-
