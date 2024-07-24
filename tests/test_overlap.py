@@ -1,4 +1,4 @@
-# tests for overlap integrals
+# tests for overlap matrix elements
 import numpy as np
 from copy import deepcopy
 from pyqint import PyQInt, gto

@@ -1,4 +1,4 @@
-# tests for nuclear integrals
+# tests for nuclear matrix elements
 import numpy as np
 from copy import deepcopy
 from pyqint import PyQInt, gto

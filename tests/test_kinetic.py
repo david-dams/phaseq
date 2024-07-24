@@ -1,4 +1,4 @@
-# tests for kinetic integrals
+# tests for kinetic matrix elements
 import numpy as np
 from copy import deepcopy
 from pyqint import PyQInt, gto
