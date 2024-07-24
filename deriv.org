@@ -10,39 +10,39 @@
 
 * Theory
 
-The non-relativistic electronic Hamiltonian can be expressed (denoting creators / annihilators by capital / small letters and employing the Einstein summation convention) as
+The non-relativistic electronic Hamiltonian can be expressed as:
 
-$H = T_{ab} Ab + V_{ab} Ab + U_{abcd} ABcd$
+\[ H = T_{ab} a^\dagger b + V_{ab} a^\dagger b + U_{abcd} a^\dagger b^\dagger cd \]
 
-where $T_{ab}, V_{ab}, U_{abcd}$ are the kinetic, nuclear and interaction matrix elements.
+where \( T_{ab} \), \( V_{ab} \), and \( U_{abcd} \) are the kinetic, nuclear, and interaction matrix elements, respectively. Here, we employ the Einstein summation convention.
 
-The non-orthonormality of the basis can be taken into account via the overlap matrix $S$ with elements
+The non-orthonormality of the basis can be accounted for via the overlap matrix \( S \), with elements:
 
-$\{A,b\} = S_{ab}$
+\[ \{a^{\dagger}, b\} = S_{ab} \]
 
-Takaeta et al. (https://csclub.uwaterloo.ca/~pbarfuss/jpsj.21.2313.pdf) have derived non-recursive expressions for each of these
-matrices in a Gaussian basis. These expressions can be recast in terms of SIMD-friendly array-oriented programming as to play nice with JAX.
+Takaeta et al. (https://csclub.uwaterloo.ca/~pbarfuss/jpsj.21.2313.pdf) have derived non-recursive expressions for each of these matrices in a Gaussian basis.
+These expressions can be recast in terms of SIMD-friendly array-oriented programming to work efficiently with JAX.
 
-Loosely speaking, this means turning loops to JAX builtins, such as matrix products and convolutions.
+Loosely speaking, this means turning loops into JAX builtins, such as matrix products and convolutions.
 
-In the following, we denote integer division by $i / 2$ for an integer index $i$.
+In the following, we denote integer division by \( i / 2 \) for an integer index \( i \).
 
 * Primitive and Contracted Matrix Elements
 
-A basis vector $v_i$ of a Gaussian basis is represented by a linear combination of primitive Gaussians. A primitive Gaussian $p_i(\vec{\mu}, \sigma)$
+A basis vector \(v_i\) of a Gaussian basis is represented by a linear combination of primitive Gaussians. A primitive Gaussian \(p_i(\vec{\mu}, \sigma)\)
 is a "normal 3D Gaussian", characterized by mean and standard deviation.
 
-$v_i = \sum_{j} c_{ij} p_j(\vec{\mu}, \sigma)$
+\[ v_i = \sum_{j} c_{ij} p_j(\vec{\mu}, \sigma) \]
 
-Here, $v$ is called "contracted".
+Here, \(v\) is called "contracted".
 
-Consequently, the primitive and contracted one-electron matrix elements (a matrix with only two indices) are related by
+Consequently, the primitive and contracted one-electron matrix elements (a matrix with only two indices) are related by:
 
-$M_v = C M_p C^T$
+\[ M_{ab} = \sum_{ij} c_{ai} c_{bj} M^{(p)}_{ij} \]
 
-And the two-electron matrix elements by
+And the two-electron matrix elements by:
 
-$U_v = C U_p C^T$
+\[ U_{abcd} = \sum_{ijkl} c_{ai} c_{bj} c_{ck} c_{dl} U^{(p)}_{ijkl} \]
 
 In the following, we discuss how to obtain array-oriented primitive matrix elements, suitable for promotion to contracted matrix elements.
 
