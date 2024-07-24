@@ -156,18 +156,13 @@ def kinetic(gaussian1, gaussian2, l_arr, t_arr):
 
 
 ### NUCLEAR ###
-def nuclear_c_matrix(I_range, p, eps, L_range):
-    t1 = jnp.pow(-eps, L_range - I_range[:, None])
-    t2 = factorial(2*I_range[:, None] - L_range) * factorial(-I_range[:, None] + L_range)
-    t3 = jnp.pow(p[:, None, None], 2*I_range[:, None] - L_range)
-    return t1 * jnp.nan_to_num(t3/t2, posinf = 0, neginf = 0) * (I_range[:, None] >= L_range//2)
-
-def nuclear(gaussian1, gaussian2, nuc):
+def nuclear(gaussian1, gaussian2, nuc, l_max=0):
     """nuclear potential term (single nucleus) between primitive gaussians.
     
     Args:    
         gaussian1, gaussian2 : array representations of primitive gaussians
         nuc : 3 array, nucleus position
+        l_max : int, maximum combined angular momentum. Pick maximum possible angular momentum of all primitives and pass as static when JIT-ing this function.
 
     Returns:
         float, overlap    
@@ -189,11 +184,16 @@ def nuclear(gaussian1, gaussian2, nuc):
     rterm = jnp.pow(eps, l_range) / factorial(l_range)
 
     # components of big matrix
-    c = nuclear_c_matrix(l_range, cp, eps, l_range)
+    L_range, I_range = l_range, l_range
+    t1 = jnp.pow(-eps, L_range - I_range[:, None])
+    t2 = factorial(2*I_range[:, None] - L_range) * factorial(-I_range[:, None] + L_range)
+    t3 = jnp.pow(cp[:, None, None], 2*I_range[:, None] - L_range)
+    c = t1 * jnp.nan_to_num(t3/t2, posinf = 0, neginf = 0) * (I_range[:, None] >= L_range//2)
 
     # convolution
     As = []
-    
+
+    # TODO: uff
     for i in range(3):
         lim = int(gaussian1[3:6][i] + gaussian2[3:6][i]) + 1
         v = iterm[:lim, i]
@@ -286,7 +286,7 @@ def interaction(gaussian1, gaussian2, gaussian3, gaussian4):
     # convolution
     As = []
 
-    # loop over cartesian axes
+    # TODO: uff
     for i in range(3):
         lim = int(gaussian1[3:6][i] + gaussian2[3:6][i]) + 1
         v = iterm1[:lim, i]
