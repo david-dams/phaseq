@@ -1,11 +1,11 @@
+* doc
+  improve kernel_to_matrix, basically everything else also
+  
 * checks
-test overlap contracted
-test kinetic contracted
-test nuclear contracted
 test interaction contracted
 
-test overlap derivative
-test kinetic derivative
+test overlap diagonal derivative
+test kinetic diagonal derivative
 test nuclear derivative
 test interaction derivative
 
@@ -15,10 +15,10 @@ test nuclear contracted derivative
 test interaction contracted derivative    
 
 ** JIT
-+ add nuclear, interaction
-+ make overlap, kinetic more transparent
++ make overlap, kinetic, nuclear, interaction more transparent
+
+** AD
+overlap, kinetic goes kaputt for diagonal elements   
 
 * Performance
-+ right now: matrix = f_coefficients . f_primitive primitive_gaussians contraction_coefficients
 + Incorporate symmetries
-+ can this be made more nicely useable?
