@@ -102,19 +102,20 @@ def norm(gaussian):
     return jnp.sqrt(nom / denom)
 
 ### OVERLAP ###
-def overlap(gaussian1, gaussian2, l_arr, t_arr):
+def overlap(gaussian1, gaussian2, l_max):
     """overlap between primitive gaussians
 
     in abstract terms, the overlap graph is a "packing layer" transforming primitive gaussians into arrays fed into a "contraction layer"
     
     Args:
-        l_arr : range of angular momenta, precomputed before simulation
         gaussian1, gaussian2 : array representations of primitive gaussians
-        t_arr : dummy array for summation, must range from 2*min(l_arr) to 2*max(l_arr), precomputed before simulation
+        l_max : int
 
     Returns:
         float, overlap    
     """
+    l_arr = jnp.arange(l_max)
+    t_arr = jnp.arange(2*l_max+1)
 
     # pack gaussians
     ra, la, aa, rb, lb, ab, g, p, rap, rbp = pack_gaussian_pair(gaussian1, gaussian2)

@@ -21,12 +21,11 @@ def test_primitive(tolerance = 1e-10):
     gaussian2 = jnp.array( [x2, y2, z2, l2, m2, n2, a2] )
     
     l_max = max(l1, m1, n1, l2, m2, n2) + 1
-    l_arr = jnp.arange(l_max)
-    t_arr = jnp.arange(2*l_max+1)   
+    overlap_jit = jax.jit(overlap, static_argnames = ['l_max'])
     
-    val11 = overlap(gaussian1, gaussian1, l_arr, t_arr)
-    val12 = overlap(gaussian1, gaussian2, l_arr, t_arr)
-    val22 = overlap(gaussian2, gaussian2, l_arr, t_arr)
+    val11 = overlap_jit(gaussian1, gaussian1, l_max)
+    val12 = overlap_jit(gaussian1, gaussian2, l_max)
+    val22 = overlap_jit(gaussian2, gaussian2, l_max)
     
     integrator = PyQInt()
 
@@ -66,11 +65,8 @@ def test_contracted(tolerance =  1e-10):
     
     gs, cs = jnp.array(gaussians), jnp.array(coeffs)
     
-    l_max = jnp.max(gs[:, 3:6]) + 1
-    l_arr = jnp.arange(l_max)
-    t_arr = jnp.arange(2*l_max+1)
-    
-    func = promote_one(lambda g1, g2 : overlap(g1, g2, l_arr, t_arr))
+    l_max = int(jnp.max(gs[:, 3:6]) + 1)
+    func = jax.jit(promote_one(lambda g1, g2 : overlap(g1, g2, l_max)))
 
     overlap11= func(cs[0, :3], cs[0, :3], gs[:3], gs[:3])    
     overlap12= func(cs[0, :3], cs[1, 3:], gs[:3], gs[3:])
@@ -108,27 +104,12 @@ def test_derivative():
     gaussian2 = jnp.array( [x2, y2, z2, l2, m2, n2, a2] )
     
     l_max = max(l1, m1, n1, l2, m2, n2) + 1
-    l_arr = jnp.arange(l_max)
-    t_arr = jnp.arange(2*l_max+1)   
-
-    func = lambda x : overlap(gaussian1, gaussian2.at[:3].set(x), l_arr, t_arr)
-    grad = jax.jit(jax.grad(func))
+    func = lambda x : overlap(gaussian1, gaussian2.at[:3].set(x), l_max)
+    grad = jax.jit(jax.jacrev(func))
     g = grad( jnp.array([x2, y2, z2]) )
 
-def test_jit():    
-    a1, l1, m1, n1, x1, y1, z1 =  0.2, 4, 1, 0, 0.2, 0.3, 0.1
-    a2, l2, m2, n2, x2, y2, z2 =  0.1, 1, 1, 2, 10., 0.1, 0.5
-    
-    gaussian1 = jnp.array( [x1, y1, z1, l1, m1, n1, a1] )
-    gaussian2 = jnp.array( [x2, y2, z2, l2, m2, n2, a2] )
-    
-    l_max = max(l1, m1, n1, l2, m2, n2) + 1
-    l_arr = jnp.arange(l_max)
-    t_arr = jnp.arange(2*l_max+1)   
-    func = jax.jit(lambda g1, g2 : overlap(g1, g2, l_arr, t_arr))    
-    func(gaussian1, gaussian2)
-    func(gaussian1, gaussian2)
-
 if __name__ == '__main__':
+    test_primitive()
     test_contracted()
+    test_derivative()
     
