@@ -4,9 +4,8 @@
 * checks
 test interaction contracted
 
-test overlap diagonal derivative
-test kinetic diagonal derivative
-test nuclear derivative
+test overlap diagonal derivative, make comparison to FD
+test kinetic diagonal derivative, make comparison to FD
 test interaction derivative
 
 test overlap contracted derivative
@@ -16,8 +15,10 @@ test interaction contracted derivative
 
 ** JIT
 + make overlap, kinetic, nuclear, interaction more transparent
++ overlap, kinetic : only supply l_max => derive t_arr; convenience wrapper to automate determination of l_max?
 
 ** AD
+check diag for all
 overlap, kinetic goes kaputt for diagonal elements   
 
 * Performance
