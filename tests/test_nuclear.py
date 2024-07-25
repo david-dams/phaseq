@@ -21,7 +21,6 @@ def test_primitive(tolerance = 1e-10):
     nuc = jnp.array([nx, ny, nz])
 
     l_max = int( 2 * jnp.max( jnp.concatenate([gaussian1[3:6], gaussian2[3:6]]) ) ) + 2
-
     nuclear_jit = jax.jit(nuclear, static_argnames = 'l_max')
     
     val11 = nuclear_jit(gaussian1, gaussian1, nuc, l_max)
@@ -69,12 +68,9 @@ def test_contracted(tolerance =  1e-10):
     
     gs, cs = jnp.array(gaussians), jnp.array(coeffs)
     
-    func = promote_one(lambda g1, g2 : nuclear(g1, g2, nuc))
-
-    f = lambda g1, g2 : nuclear(g1, g2, nuc)
-    f_vmapped = jax.vmap(jax.vmap(lambda g1, g2 : f(g1, g2), (0, None), 0), (None, 0), 0)
-    
-    import pdb; pdb.set_trace()
+    l_max = int( 2 * jnp.max( jnp.concatenate([gs[3:], gs[:3]]) ) ) + 2
+    nuclear_jit = jax.jit(lambda g1, g2, nuc : nuclear(g1, g2, nuc, l_max))
+    func = jax.jit(promote_one(lambda g1, g2 : nuclear_jit(g1, g2, nuc)))
 
     nuclear11= func(cs[0, :3], cs[0, :3], gs[:3], gs[:3])
     nuclear12= func(cs[0, :3], cs[1, 3:], gs[:3], gs[3:])
@@ -105,6 +101,28 @@ def test_contracted(tolerance =  1e-10):
     assert abs(nuclear_ref12 - nuclear12) < tolerance
     assert abs(nuclear_ref22 - nuclear22) < tolerance
 
+
+    
+def test_derivative( tolerance = 1e-10 ):
+    a1, l1, m1, n1, x1, y1, z1 =  0.2, 4, 1, 2, 0.2, 0.3, 0.1
+    a2, l2, m2, n2, x2, y2, z2 =  1, 4, 2, 2, 10., 2., 0.7
+    nx, ny, nz = 1, 2, 3.
+    
+    gaussian1 = jnp.array( [x1, y1, z1, l1, m1, n1, a1] )
+    gaussian2 = jnp.array( [x2, y2, z2, l2, m2, n2, a2] )
+    nuc = jnp.array([nx, ny, nz])
+
+    l_max = int( 2 * jnp.max( jnp.concatenate([gaussian1[3:6], gaussian2[3:6]]) ) ) + 2
+    func = lambda x : nuclear(gaussian1, gaussian2, x, l_max)
+    grad = jax.jit(jax.jacrev(func))
+    g = grad( jnp.array([nx, ny, nz]) )
+
+    num = (func(jnp.array([nx + eps, ny, nz])) - func(jnp.array([nx, ny, nz]))) / eps
+
+    print(abs(g[0] - num))
+    assert abs(g[0] - num) < tolerance
+    
 if __name__ == '__main__':
     test_primitive()
-    # test_contracted()    
+    test_contracted()
+    test_derivative()
