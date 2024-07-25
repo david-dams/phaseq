@@ -29,9 +29,9 @@ def promote_two(f):
         c3 = get_norms_coefficients(g3, coeff3)
         c4 = get_norms_coefficients(g4, coeff4)
         
-        return jnp.einsum('i,j,k,l,ijkl->', c1, c2, c3, c4, f_vmapped(g1, g2, g3, g4))
+        return jnp.einsum('i,j,k,l,ijkl->', c1, c2, c3, c4, f_vmapped(g4, g3, g2, g1))
     
-    f_vmapped = jax.vmap(jax.vmap(lambda g1, g2, g3, g4 : f(g1, g2, g3, g4), (0, None), 0), (None, 0), 0)
+    f_vmapped = jax.vmap(jax.vmap(jax.vmap(jax.vmap(lambda g1, g2, g3, g4 : f(g1, g2, g3, g4), (0, None, None, None), 0), (None, 0, None, None), 0), (None, None, 0, None), 0), (None, None, None, 0), 0)
     
     return element
 
