@@ -2,24 +2,14 @@
   improve kernel_to_matrix, basically everything else also
   
 * checks
-test interaction contracted
-
-test overlap diagonal derivative, make comparison to FD
-test kinetic diagonal derivative, make comparison to FD
-test interaction derivative
-
-test overlap contracted derivative
-test kinetic contracted derivative
-test nuclear contracted derivative
-test interaction contracted derivative    
-
+test zeros in AD
+  
 ** JIT
 + make overlap, kinetic, nuclear, interaction more transparent
 + overlap, kinetic : only supply l_max => derive t_arr; convenience wrapper to automate determination of l_max?
 
 ** AD
-check diag for all
-overlap, kinetic goes kaputt for diagonal elements   
-
+seems to mostly work, but zeros out for diagonals in S, T and orbitals on same nucleus for V, U might be fine, what is going on?
+   
 * Performance
 + Incorporate symmetries
