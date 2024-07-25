@@ -140,27 +140,26 @@ def overlap(gaussian1, gaussian2, l_max):
 
 
 ### KINETIC ###
-def kinetic(gaussian1, gaussian2, l_arr, t_arr):
+def kinetic(gaussian1, gaussian2, l_max):
     """laplace operator between primitive gaussians. decomposes into overlaps and is just dumbly implemented as such.    
     
     Args:
         gaussian1, gaussian2 : array representations of primitive gaussians
-        l_arr : range of angular momenta, precomputed before simulation
-        t_arr : dummy array for summation, must range from 2*min(l_arr-2) to 2*max(l_arr+2), precomputed before simulation
+        l_max : int
 
     Returns:
         float, kinetic matrix elements
     """    
-    element = gaussian2[-1] * (2.0 * gaussian2[3:6].sum() + 3.0) * overlap(gaussian1, gaussian2, l_arr, t_arr)
+    element = gaussian2[-1] * (2.0 * gaussian2[3:6].sum() + 3.0) * overlap(gaussian1, gaussian2, l_max)
     
-    element += -2.0 * jnp.pow(gaussian2[-1], 2) * (overlap(gaussian1, gaussian2.at[3].set(gaussian2[3]+2), l_arr, t_arr) +
-                                                overlap(gaussian1, gaussian2.at[4].set(gaussian2[4]+2), l_arr, t_arr) +
-                                                overlap(gaussian1, gaussian2.at[5].set(gaussian2[5]+2), l_arr, t_arr) )
+    element += -2.0 * jnp.pow(gaussian2[-1], 2) * (overlap(gaussian1, gaussian2.at[3].set(gaussian2[3]+2), l_max) +
+                                                overlap(gaussian1, gaussian2.at[4].set(gaussian2[4]+2), l_max) +
+                                                overlap(gaussian1, gaussian2.at[5].set(gaussian2[5]+2), l_max) )
 
     fac = gaussian2[3:6] * (gaussian2[3:6] - 1)
-    element += -0.5 * ( fac[0] * overlap(gaussian1, gaussian2.at[3].set(gaussian2[3]-2), l_arr, t_arr) +
-                     fac[1] * overlap(gaussian1, gaussian2.at[4].set(gaussian2[4]-2), l_arr, t_arr) +
-                     fac[2] * overlap(gaussian1, gaussian2.at[5].set(gaussian2[5]-2), l_arr, t_arr) )
+    element += -0.5 * ( fac[0] * overlap(gaussian1, gaussian2.at[3].set(gaussian2[3]-2), l_max) +
+                     fac[1] * overlap(gaussian1, gaussian2.at[4].set(gaussian2[4]-2), l_max) +
+                     fac[2] * overlap(gaussian1, gaussian2.at[5].set(gaussian2[5]-2), l_max) )
 
     return element
 
