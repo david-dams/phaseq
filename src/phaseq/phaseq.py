@@ -5,9 +5,20 @@ from jax.scipy.special import gammainc, gamma, factorial
 jax.config.update("jax_enable_x64", True)
 
 ### ELEMENTARY FUNCTIONS ###
+EPS = 1e-16 # TODO: remove hotfix to avoid nan when differentiating x**n at x = 0 by defining custom JVP
+
+def norm2(v):
+    """squared norm""" 
+    return jnp.pow(v, 2).sum() # this is needed because jnp.pow(jnp.linalg.norm(v), 2) is not differentiable at 0
+
+def regularize(v):
+    """regularizes vector components"""
+    return jnp.where( jnp.abs(v) < EPS, jnp.sign(v) * EPS, v)
+
 def boys_fun(index, arg):
     """computes the boys function for the specified index and scalar argument"""
-    arg += (jnp.abs(arg) < 0.00000001) * 0.00000001
+    # TODO: replace with EPS, this is for comparing to PyQInt
+    arg = jax.lax.cond(jnp.abs(arg) < 0.00000001, lambda: 0.00000001, lambda: arg)
     return gammainc(index+0.5, arg) * gamma(index+0.5) * 0.5 * jnp.pow(arg,-index-0.5) 
 
 def binomial(n, m):
@@ -32,10 +43,10 @@ def binomial_prefactor(s_arr, gaussian1, gaussian2, t_arr):
     lower_limit = t_arr[None, None, :] <= (jnp.minimum(s_arr[:, None], gaussian2[None, 3:6]))[:, :, None]
     upper_limit = (s_arr[:, None] - gaussian1[None, 3:6])[:, :, None] <= t_arr[None, None, :]
     mask = lower_limit * upper_limit
-    st_terms = binomial(gaussian1[None, 3:6, None], st[:, None, :]) * jnp.pow(gaussian1[None, :3, None], gaussian1[None, 3:6, None] - st[:, None, :])
+    st_terms = binomial(gaussian1[None, 3:6, None], st[:, None, :]) * jnp.pow(regularize(gaussian1)[None, :3, None], gaussian1[None, 3:6, None] - st[:, None, :])
 
     # 3 x t array
-    t_terms = binomial(gaussian2[3:6, None], t_arr) * jnp.pow(gaussian2[:3, None], gaussian2[3:6,None] - t_arr)
+    t_terms = binomial(gaussian2[3:6, None], t_arr) * jnp.pow(regularize(gaussian2)[:3, None], gaussian2[3:6,None] - t_arr)
     
     # contract to s x 3 array
     contracted = jnp.einsum('it, sit->si', jnp.nan_to_num(t_terms, posinf=0, neginf=0), jnp.nan_to_num(st_terms, posinf=0, neginf=0) * mask)
@@ -50,8 +61,8 @@ def pack_gaussian_pair(gaussian1, gaussian2):
     # add gaussians
     g = aa + ab
     p = (aa*ra + ab*rb) / g    
-    rap = jnp.linalg.norm(ra-p)**2
-    rbp = jnp.linalg.norm(rb-p)**2
+    rap = norm2(ra-p)
+    rbp = norm2(rb-p)
 
     return ra, la, aa, rb, lb, ab, g, p, rap, rbp
 
@@ -121,7 +132,7 @@ def overlap(gaussian1, gaussian2, l_max):
     ra, la, aa, rb, lb, ab, g, p, rap, rbp = pack_gaussian_pair(gaussian1, gaussian2)
     
     # prefactor
-    a = jnp.pow(jnp.pi / g, 1.5)  * jnp.exp( -aa*ab * jnp.linalg.norm(ra-rb)**2 / g)    
+    a = jnp.pow(jnp.pi / g, 1.5)  * jnp.exp( -aa*ab * norm2(ra-rb) / g)    
     
     # summation limits
     l_limits = jnp.floor((la + lb) / 2)
@@ -182,7 +193,7 @@ def nuclear(gaussian1, gaussian2, nuc, l_max=0):
     
     # relative position of center and nucleus    
     cp = p - nuc
-    rcp2 = jnp.pow(jnp.linalg.norm(cp), 2)
+    rcp2 = norm2(cp)
 
     # components of big vector
     # l_max = jnp.max(gaussian1[3:6] + gaussian2[3:6]) + 1
@@ -197,7 +208,7 @@ def nuclear(gaussian1, gaussian2, nuc, l_max=0):
     L_range, I_range = l_range, l_range
     t1 = jnp.pow(-eps, L_range - I_range[:, None])
     t2 = factorial(2*I_range[:, None] - L_range) * factorial(-I_range[:, None] + L_range)
-    t3 = jnp.pow(cp[:, None, None], 2*I_range[:, None] - L_range)
+    t3 = jnp.pow(regularize(cp)[:, None, None], 2*I_range[:, None] - L_range)
     c = t1 * (I_range[:, None] >= L_range//2) * jnp.nan_to_num(1/t2, nan= 0, posinf = 0, neginf = 0) * jnp.nan_to_num(t3, nan= 0, posinf = 0, neginf = 0)
     
     # convolution
@@ -223,7 +234,7 @@ def nuclear(gaussian1, gaussian2, nuc, l_max=0):
     # raw sum
     res = f_arr @ conv
     
-    rab2 = jnp.pow(jnp.linalg.norm(rb - ra), 2)
+    rab2 = norm2(rb - ra)
     prefac = 2*jnp.pi/g * jnp.exp(-aa*ab*rab2/g)
     
     return -prefac * res
@@ -291,7 +302,7 @@ def interaction(gaussian1, gaussian2, gaussian3, gaussian4, l_max):
     # computes the matrix: $e_{I, K} &= \frac{ K! (-)^{K-I} p_x^{2I - K}}{(K-I)!(2I -K)!\delta^{I}}$
     t1 = factorial(K_range) / jnp.pow(delta, I_range)[:, None]
     t2 =  factorial(2*I_range[:, None] - K_range) * factorial(K_range - I_range[:, None]) 
-    t3 = jnp.pow(-1, K_range - I_range[:, None]) * jnp.pow(center_center[:, None, None], 2*I_range[:, None] - K_range)    
+    t3 = jnp.pow(-1, K_range - I_range[:, None]) * jnp.pow(regularize(center_center)[:, None, None], 2*I_range[:, None] - K_range)    
     d = t1 * jnp.nan_to_num(1/t2, posinf = 0, neginf = 0) * jnp.nan_to_num(t3, posinf = 0, neginf = 0)
     
     # convolution
@@ -315,12 +326,12 @@ def interaction(gaussian1, gaussian2, gaussian3, gaussian4, l_max):
     conv = jnp.convolve(As[0], jnp.convolve(As[1], As[2]))
     
     # Boys-function
-    arg = jnp.linalg.norm(p-q)**2 / (4 * delta)
+    arg = norm2(p-q) / (4 * delta)
     f_arr = jnp.nan_to_num(boys_fun( jnp.arange(conv.size), arg ))
 
     # global prefactor
-    rab2 = jnp.linalg.norm(gaussian1[:3]-gaussian2[:3])**2
-    rcd2 = jnp.linalg.norm(gaussian3[:3]-gaussian4[:3])**2
+    rab2 = norm2(gaussian1[:3]-gaussian2[:3])
+    rcd2 = norm2(gaussian3[:3]-gaussian4[:3])
     prefac = 2.0 * jnp.pow(jnp.pi, 2.5) / (gamma1 * gamma2 * jnp.sqrt(gamma1 + gamma2)) * jnp.exp(-a1*a2*rab2/gamma1) * jnp.exp(-a3*a4*rcd2/gamma2)
 
     return prefac * (f_arr @ conv)
