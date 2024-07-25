@@ -114,7 +114,7 @@ def test_derivative():
     t_arr = jnp.arange(2*l_max+1)   
 
     func = lambda x : overlap(gaussian1, gaussian2.at[:3].set(x), l_arr, t_arr)
-    grad = jax.jit(jax.grad)(func)
+    grad = jax.jit(jax.grad(func))
     g = grad( jnp.array([x2, y2, z2]) )
 
 def test_jit():    
