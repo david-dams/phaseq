@@ -198,7 +198,7 @@ def nuclear(gaussian1, gaussian2, nuc, l_max=0):
     t1 = jnp.pow(-eps, L_range - I_range[:, None])
     t2 = factorial(2*I_range[:, None] - L_range) * factorial(-I_range[:, None] + L_range)
     t3 = jnp.pow(cp[:, None, None], 2*I_range[:, None] - L_range)
-    c = t1 * jnp.nan_to_num(t3/t2, posinf = 0, neginf = 0) * (I_range[:, None] >= L_range//2)
+    c = t1 * (I_range[:, None] >= L_range//2) * jnp.nan_to_num(1/t2, nan= 0, posinf = 0, neginf = 0) * jnp.nan_to_num(t3, nan= 0, posinf = 0, neginf = 0) 
 
     # convolution
     As = []
