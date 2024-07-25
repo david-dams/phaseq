@@ -65,8 +65,6 @@ def test_contracted(tolerance =  1e-10):
     ]    
     
     gs, cs = jnp.array(gaussians), jnp.array(coeffs)
-    c1 = get_norms_coefficients(gs[:3], cs[0, :3])
-    c2 = get_norms_coefficients(gs[3:], cs[1, 3:])
     
     l_max = jnp.max(gs[:, 3:6]) + 1
     l_arr = jnp.arange(l_max)
