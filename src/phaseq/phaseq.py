@@ -55,35 +55,44 @@ def pack_gaussian_pair(gaussian1, gaussian2):
 
     return ra, la, aa, rb, lb, ab, g, p, rap, rbp
 
-def kernel_to_matrix(kernel, imax):
-    """Reshapes the N-dim array `kernel` into a N x N matrix
-    
-    out = kernel @ signal
+def kernel_to_matrix(kernel, imax, imax_lim):
+    """Helper function for vectorized evaluation of certain "restricted cross-correlations" occuring in nuclear and interaction matrix elements.
 
-    Is the output array of the discrete convolution.
+    Args:
+      kernel : N - array containing kernel elements of the restricted cross-correlation
+      imax   : int, maximum combined angular momentum, such that N = imax // 2, chose as static arg of value 2*(maximum angular momentum of all gaussians) for JIT compilation
+      imax_lim : int, used to determine the actual summation limit
+    
+    Returns:
+       imax x imax array
+
+    Allows vectorized evaluation of an expression like $T(I) =  \sum\limits_{i - 2r = I, r \leq i/2} a(i) b(r)$ where i/2 denotes integer division as 
+    
+    T = B @ a
+    
+    where B is a matrix. This occurs in evaluation nuclear and interaction matrix elements.
+
+    This works as follows:
+
+    1. Inflate the array b' of b-values such that b'[2r] = b[r] and b[2r+1] = 0.
+    2. Then, since $\sum\limits_{i - j = I, j \leq i} a[i] b'[j] = \sum\limits_{i, I \geq 0} a[i] b'[i - I]$ define a matrix B such that B[I, i] = b'[i - I].
     """
-    # conditionally skip for odd total angular momnentum
-    rmax = imax // 2 + 1 if (imax % 2 == 1) else imax // 2
-    kernel = kernel[:rmax]
+    # zero-out elements
+    kernel *= (jnp.arange(kernel.size) <= imax_lim // 2)
     
     # "inflate" g such that g[2*r] = g(r)
-    kernel = jnp.insert(arr = kernel, obj = jnp.arange(0, kernel.size) + 1, values = 0)
-
-    if imax % 2 == 1:
-        kernel = kernel[:-1]
-            
-    N = kernel.shape[0]
-    
+    kernel = jnp.insert(arr = kernel, obj = jnp.arange(kernel.size) + 1, values = 0)
+                
     # Create a 2D array of indices
-    row_indices = jnp.arange(N)[:, None]  # Shape: (N, 1)
-    col_indices = jnp.arange(N)[None, :]  # Shape: (1, n)
+    row_indices = jnp.arange(imax)[:, None]  # Shape: (N, 1)
+    col_indices = jnp.arange(imax)[None, :]  # Shape: (1, n)
     
     # Compute the shifted indices
     indices = col_indices - row_indices
 
     # reshape g such that gs[L, i] = gs[i - L]
     # Gather the elements using the shifted indices, masking out "wrap-around" indices
-    M = kernel[indices] * (indices >= 0)
+    M = kernel[indices] * (indices >= 0) * (col_indices > (imax_lim-imax))
     return M
 
 def norm(gaussian):
@@ -176,12 +185,13 @@ def nuclear(gaussian1, gaussian2, nuc, l_max=0):
     rcp2 = jnp.pow(jnp.linalg.norm(cp), 2)
 
     # components of big vector
-    l_max = jnp.max(gaussian1[3:6] + gaussian2[3:6])
-    l_range = jnp.arange(l_max + 1) # size is l1 + l2 + 1
+    # l_max = jnp.max(gaussian1[3:6] + gaussian2[3:6]) + 1
+    l_range = jnp.arange(l_max) # size is l1 + l2 + 1
     pa, pb = p - gaussian1[:3], p - gaussian2[:3]
     bf1 = binomial_prefactor(l_range, gaussian1.at[:3].set(pa), gaussian2.at[:3].set(pb), l_range)
     iterm = (factorial(l_range) * jnp.pow(-1, l_range))[:, None] * bf1
-    rterm = jnp.pow(eps, l_range) / factorial(l_range)
+    l_range_half = jnp.arange(l_max // 2)
+    rterm = jnp.pow(eps, l_range_half) / factorial(l_range_half)
 
     # components of big matrix
     L_range, I_range = l_range, l_range
@@ -195,17 +205,20 @@ def nuclear(gaussian1, gaussian2, nuc, l_max=0):
 
     # TODO: uff
     for i in range(3):
-        lim = int(gaussian1[3:6][i] + gaussian2[3:6][i]) + 1
-        v = iterm[:lim, i]
-        a = kernel_to_matrix(rterm, v.size) @ v
-
-        res = c[i, :a.size, :a.size] @ a
+        lim = gaussian1[3:6][i] + gaussian2[3:6][i] + 1
+        mat = kernel_to_matrix(rterm, l_max, lim)
+        v = iterm[:, i]
+        a = mat @ v
+        res = c[i] @ a                
         As.append(res)
 
     conv = jnp.convolve(jnp.convolve(As[0], As[1]), As[2])
 
+    # each array has size l_max => total size is double conv => l_max + l_max - 1 + l_max - 1
+    conv_size = 3*l_max - 2
+    
     # function array over unique range
-    f_arr = boys_fun( jnp.arange(conv.size), rcp2 * g )
+    f_arr = boys_fun( jnp.arange(conv_size), rcp2 * g )
 
     # raw sum
     res = f_arr @ conv

@@ -3,47 +3,47 @@ import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
+def kernel_to_matrix(kernel, imax, imax_lim):
+    """Helper function for vectorized evaluation of certain "restricted cross-correlations" occuring in nuclear and interaction matrix elements.
 
-def array_to_matrix(x):
-    N = x.shape[0]
+    Args:
+      kernel : N- array containing kernel elements of the restricted cross-correlation
+      imax   : int, N
+
+    Allows vectorized evaluation of an expression like $T(I) =  \sum\limits_{i - 2r = I, r \leq i/2} a(i) b(r)$ where i/2 denotes integer division as 
     
+    T = B @ a
+    
+    where B is a matrix. This occurs in evaluation nuclear and interaction matrix elements.
+
+    This works as follows:
+
+    1. Inflate the array b' of b-values such that b'[2r] = b[r] and b[2r+1] = 0.
+    2. Then, since $\sum\limits_{i - j = I, j \leq i} a[i] b'[j] = \sum\limits_{i, I \geq 0} a[i] b'[i - I]$ define a matrix B such that B[I, i] = b'[i - I].
+    """
+    # conditionally skip for odd total angular momnentum
+    rmax = imax // 2 # TODO: move out of loop for fixed shape?
+    rmax_lim = imax_lim // 2 
+
+    # zero-out elements
+    kernel *= (jnp.arange(imax) <= rmax_lim)
+    
+    # "inflate" g such that g[2*r] = g(r)
+    kernel = jnp.insert(arr = kernel[:rmax], obj = jnp.arange(rmax) + 1, values = 0)
+                
     # Create a 2D array of indices
-    row_indices = jnp.arange(N)[:, None]  # Shape: (N, 1)
-    col_indices = jnp.arange(N)[None, :]  # Shape: (1, n)
+    row_indices = jnp.arange(imax)[:, None]  # Shape: (N, 1)
+    col_indices = jnp.arange(imax)[None, :]  # Shape: (1, n)
     
     # Compute the shifted indices
     indices = col_indices - row_indices
 
+    # reshape g such that gs[L, i] = gs[i - L]
     # Gather the elements using the shifted indices, masking out "wrap-around" indices
-    M = x[indices] * (indices >= 0)
+    M = kernel[indices] * (indices >= 0)
+    M = M.at[:, (imax_lim-imax):].set(0)
+
     return M
-
-def test_restricted_matrix_cross_correlation(tolerance = 1e-12):
-    """restricted matrix cross-correlations of type
-    $A_I = \sum\limits_{K - u = I} f(K) \cdot d(K, u)$
-    """
-
-    def f(K):
-        return 1/(K+1)
-
-    def d(K, u):
-        return K * u
-
-    # explicit sum
-    kmax= 12
-    ref = [0.0] * kmax
-    for k in range(kmax):
-        for u in range(k + 1):
-            I = K - u
-            if I >= 0:
-                ref[I] += f(K) * d(K, u)
-    ref = jnp.array(ref)
- 
-    # matrix magic
-    ds = jnp.array( [d(K, u) for k in range(kmax) for u in range])
-    fs = jnp.array( [f(K) for k in range()])
-
-    res = ds @ fs
 
 def test_restricted_cross_correlation(tolerance = 1e-12):
     """restricted cross-correlations of type
@@ -61,9 +61,10 @@ def test_restricted_cross_correlation(tolerance = 1e-12):
         return 1 / (L + 1)
 
     # explicit sum
-    imax= 12
+    imax = 14
     ref = [0.0] * imax
-    for i in range(imax):
+    imax_lim = 4
+    for i in range(imax_lim):
         for r in range(i//2 + 1):
             L = i - 2*r
             if L >= 0:
@@ -73,28 +74,23 @@ def test_restricted_cross_correlation(tolerance = 1e-12):
     # matrix magic
 
     # first, "inflate" g such that g[2*r] = g(r)
-    rmax = imax // 2 + 1 if (imax % 2 == 1) else imax // 2   
-    gs = jnp.array([g(i) for i in range(rmax)])
-    gs = jnp.insert(arr = gs, obj = jnp.arange(0, gs.size) + 1, values = 0)
-    if imax % 2 == 1:
-        gs = gs[:-1]
+    gs = jnp.array([g(i) for i in range(imax)])
 
     # compute fs
     fs = jnp.array([f(i) for i in range(imax)])
     
     # compute hs
-    hs = jnp.array([h(i) for i in range(len(gs))])
+    hs = jnp.array([h(i) for i in range(imax)])
 
     # reshape g such that gs[L, i] = gs[i - L]
-    gs_old = gs
-    gs = array_to_matrix(gs)
+    mat = kernel_to_matrix(gs, imax, imax_lim)
     
     # compute masked cross-correlation
-    res = gs @ fs * hs
+    res = mat @ fs * hs
 
     # compute difference
     delta = res - ref    
-    print(delta)
+    # print(res, ref, delta)
     assert jnp.abs(delta).sum() <= tolerance
 
 if __name__ == '__main__':
