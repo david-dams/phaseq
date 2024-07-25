@@ -25,7 +25,7 @@ These expressions can be recast in terms of SIMD-friendly array-oriented program
 
 Loosely speaking, this means turning loops into JAX builtins, such as matrix products and convolutions.
 
-In the following, we denote integer division by \( i / 2 \) for an integer index \( i \).
+In the following, we denote integer division by \( i / 2 \) for an integer index \( i \) (i.e. we always round to next-lowest integer).
 
 * Primitive and Contracted Matrix Elements
 
