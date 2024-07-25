@@ -198,8 +198,8 @@ def nuclear(gaussian1, gaussian2, nuc, l_max=0):
     t1 = jnp.pow(-eps, L_range - I_range[:, None])
     t2 = factorial(2*I_range[:, None] - L_range) * factorial(-I_range[:, None] + L_range)
     t3 = jnp.pow(cp[:, None, None], 2*I_range[:, None] - L_range)
-    c = t1 * (I_range[:, None] >= L_range//2) * jnp.nan_to_num(1/t2, nan= 0, posinf = 0, neginf = 0) * jnp.nan_to_num(t3, nan= 0, posinf = 0, neginf = 0) 
-
+    c = t1 * (I_range[:, None] >= L_range//2) * jnp.nan_to_num(1/t2, nan= 0, posinf = 0, neginf = 0) * jnp.nan_to_num(t3, nan= 0, posinf = 0, neginf = 0)
+    
     # convolution
     As = []
 
@@ -228,17 +228,8 @@ def nuclear(gaussian1, gaussian2, nuc, l_max=0):
     
     return -prefac * res
 
-### INTERACTION ###    
-def interaction_d_matrix(K_range, I_range, p, delta):
-    """computes the matrix: $e_{I, K} &= \frac{ K! (-)^{K-I} p_x^{2I - K}}{(K-I)!(2I -K)!\delta^{I}}$"""
-
-    t1 = factorial(K_range) / jnp.pow(delta, I_range)[:, None]
-    t2 =  factorial(2*I_range[:, None] - K_range) * factorial(K_range - I_range[:, None]) 
-    t3 = jnp.pow(-1, K_range - I_range[:, None]) * jnp.pow(p[:, None, None], 2*I_range[:, None] - K_range)
-    
-    return t1 * jnp.nan_to_num(t3/t2, posinf = 0, neginf = 0)
-    
-def interaction(gaussian1, gaussian2, gaussian3, gaussian4):    
+### INTERACTION ###        
+def interaction(gaussian1, gaussian2, gaussian3, gaussian4, l_max):    
     # unpack gaussians
     a1, a2 = gaussian1[-1], gaussian2[-1]
     a3, a4 = gaussian3[-1], gaussian4[-1]
@@ -272,52 +263,60 @@ def interaction(gaussian1, gaussian2, gaussian3, gaussian4):
     # we precompute quantities over the largest index range, given by max(l1+l2, m1+m2, n1+n2) + 1
 
     # precompute for a array
-    l_max1 = jnp.max(gaussian1[3:6] + gaussian2[3:6])
-    l_range = jnp.arange(l_max1 + 1) # size is l1 + l2 + 1
+    # l_max1 = jnp.max(gaussian1[3:6] + gaussian2[3:6])
+    l_range = jnp.arange(l_max) # size is l1 + l2 + 1
+    l_range_half =  jnp.arange(l_max // 2)
+    
     pa, pb = p - gaussian1[:3], p - gaussian2[:3]
     bf1 = binomial_prefactor(l_range, gaussian1.at[:3].set(pa), gaussian2.at[:3].set(pb), l_range)
     facgamma1 = factorial(l_range) / jnp.pow(4*gamma1, l_range)
-    rterm1 = 1/facgamma1
+    rterm1 = jnp.pow(4*gamma1, l_range_half) / factorial(l_range_half) 
     iterm1 = facgamma1[:, None] * bf1
     fac1 = 1 / factorial(l_range)
 
     # precompute for b array
-    l_max2 = jnp.max(gaussian3[3:6] + gaussian4[3:6])
-    l_range = jnp.arange(l_max2 + 1)
+    # l_max2 = jnp.max(gaussian3[3:6] + gaussian4[3:6])
+    # l_range = jnp.arange(l_max2 + 1)
     qc, qd = q - gaussian3[:3], q - gaussian4[:3]
     bf2 = binomial_prefactor(l_range, gaussian3.at[:3].set(qc), gaussian4.at[:3].set(qd), l_range)
     facgamma2 = factorial(l_range) / jnp.pow(4*gamma2, l_range)    
-    rterm2 = 1/facgamma2
+    rterm2 =  jnp.pow(4*gamma2, l_range_half) / factorial(l_range_half)
     iterm2 = (facgamma2 * jnp.pow(-1, l_range))[:, None] * bf2
     fac2 = 1 / factorial(l_range)
     
     # precompute the matrix A
-    K_range = jnp.arange(l_max1 + l_max2 + 1) # size is l1 + l2 + l3 + l4 + 1
-    I_range = jnp.arange(l_max1 + l_max2 + 1)
-    d = interaction_d_matrix(K_range, I_range, center_center, delta)
+    K_range = jnp.arange(2*l_max - 1) # size is l1 + l2 + l3 + l4 + 1
+    I_range = jnp.arange(2*l_max - 1)
 
+    # computes the matrix: $e_{I, K} &= \frac{ K! (-)^{K-I} p_x^{2I - K}}{(K-I)!(2I -K)!\delta^{I}}$
+    t1 = factorial(K_range) / jnp.pow(delta, I_range)[:, None]
+    t2 =  factorial(2*I_range[:, None] - K_range) * factorial(K_range - I_range[:, None]) 
+    t3 = jnp.pow(-1, K_range - I_range[:, None]) * jnp.pow(center_center[:, None, None], 2*I_range[:, None] - K_range)    
+    d = t1 * jnp.nan_to_num(1/t2, posinf = 0, neginf = 0) * jnp.nan_to_num(t3, posinf = 0, neginf = 0)
+    
     # convolution
     As = []
 
     # TODO: uff
     for i in range(3):
-        lim = int(gaussian1[3:6][i] + gaussian2[3:6][i]) + 1
-        v = iterm1[:lim, i]
-        a = fac1[:v.size] * (kernel_to_matrix(rterm1, v.size) @ v)
+        lim = gaussian1[3:6][i] + gaussian2[3:6][i] + 1
+        mat = kernel_to_matrix(rterm1, l_max, lim)
+        v = iterm1[:, i]
+        a = fac1 * (kernel_to_matrix(rterm1, l_max, lim) @ v)
 
-        lim = int(gaussian3[3:6][i] + gaussian4[3:6][i]) + 1
-        v = iterm2[:lim, i]
-        b = fac2[:v.size] * (kernel_to_matrix(rterm2, v.size) @ v)
+        lim = gaussian3[3:6][i] + gaussian4[3:6][i]
+        v = iterm2[:, i]
+        b = fac2 * (kernel_to_matrix(rterm2, l_max, lim) @ v)
 
         c = jnp.convolve(a, b)
-        res = d[i, :c.size, :c.size] @ c
+        res = d[i] @ c
         As.append(res)
-        
+
     conv = jnp.convolve(As[0], jnp.convolve(As[1], As[2]))
     
     # Boys-function
     arg = jnp.linalg.norm(p-q)**2 / (4 * delta)
-    f_arr = boys_fun( jnp.arange(conv.size), arg )
+    f_arr = jnp.nan_to_num(boys_fun( jnp.arange(conv.size), arg ))
 
     # global prefactor
     rab2 = jnp.linalg.norm(gaussian1[:3]-gaussian2[:3])**2
