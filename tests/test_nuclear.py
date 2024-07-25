@@ -117,6 +117,7 @@ def test_derivative( tolerance = 1e-10 ):
     grad = jax.jit(jax.jacrev(func))
     g = grad( jnp.array([nx, ny, nz]) )
 
+    eps = 1e-8
     num = (func(jnp.array([nx + eps, ny, nz])) - func(jnp.array([nx, ny, nz]))) / eps
 
     print(abs(g[0] - num))
