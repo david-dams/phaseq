@@ -5,45 +5,7 @@ import jax.numpy as jnp
 
 from phaseq import *
 
-@dc.dataclass
-class Basis:
-    """gaussian basis. each basis is a dictionary mapping strings to JAX array tuples of the form 
-       orbital_name : (coefficients, alphas, lmn)"""
-    sto_3g = {
-        "pz" : (jnp.array([ 0.155916, 0.607684, 0.391957 ]), 
-                jnp.array( [ 2.941249, 0.683483, 0.22229 ]),
-                jnp.array( [ 0,0,1 ]) )
-        }
-
-@dc.dataclass
-class Orbital:
-    basis = None
-    position = None
-    
-class Structure:
-    """provides a convenience DSL for building a structure / molecule"""
-    def __init__(self):
-        self.orbitals = []
-        
-    def add_orbital(self, orb):
-        self.orbitals += jnp.array( [c, pos, ...] )
-        return self
-        
-    def add_orbitals(self, orbs):
-        for orb in orbs:
-            self.add_orbital(orb)
-        return self
-            
-    @property
-    def nuclei_charge_position(self):
-        return list(set(orbitals))
-
-def get_l_max(basis):
-    # need to know maximum angular momentum for JIT
-    return int(jnp.concatenate([c[-1] for c in basis.values()]).max() + 1)
-    
-def get_atomic_charge(atom):
-    charges = {
+AtomChargeMap = {
         'H': 1, 'He': 2, 'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O': 8, 'F': 9, 'Ne': 10,
         'Na': 11, 'Mg': 12, 'Al': 13, 'Si': 14, 'P': 15, 'S': 16, 'Cl': 17, 'Ar': 18,
         'K': 19, 'Ca': 20, 'Sc': 21, 'Ti': 22, 'V': 23, 'Cr': 24, 'Mn': 25, 'Fe': 26,
@@ -60,4 +22,73 @@ def get_atomic_charge(atom):
         'Sg': 106, 'Bh': 107, 'Hs': 108, 'Mt': 109, 'Ds': 110, 'Rg': 111, 'Cn': 112,
         'Nh': 113, 'Fl': 114, 'Mc': 115, 'Lv': 116, 'Ts': 117, 'Og': 118
     }
-    return charges[atom]
+
+BasisMap ={
+    "sto_3g" : {
+        "pz" : { "coefficients" : jnp.array([ 0.155916, 0.607684, 0.391957 ]), 
+                 "alphas" : jnp.array( [ 2.941249, 0.683483, 0.22229 ]),
+                 "lmn" : jnp.array( [ 0,0,1 ]) } }
+    }
+    
+
+class Basis:
+    """holds gaussian basis expansions. 
+
+    a basis is a dictionary mapping strings to JAX array tuples of the form 
+
+    orbital_name : (coefficients, alphas, lmn)
+    
+    such that the i-th cgf is 
+
+    [coefficients[i], position, lmn, alphas[i]]
+    """
+    def __init__(self, key):
+        self.basis = BasisMap[key]
+        
+    @property
+    def l_max(self):
+        """maximum angular momentum in the basis set. Needed for JIT compilation of matrix elements"""
+        return int(jnp.concatenate([c["lmn"] for c in self.basis.values()]).max()) + 1
+
+@dc.dataclass
+class Orbital:
+    """represents an orbital"""
+    name : str = None
+    basis : jax.Array = dc.field(default_factory=lambda : jnp.array([0, 0, 0]))
+    position : jax.Array = dc.field(default_factory=lambda : jnp.array([0, 0, 0]))
+
+    @property
+    def array(self):
+        """converts orbital to cgf array representation of the form
+
+        cgf = [ [coeff, primitive] ], where 
+        
+        coeff is the expansion coefficient for the primitive gaussian with array reprentation
+        
+        primitive = [pos, lmn, alpha]
+        """
+
+        orb = self.basis.basis[self.name]
+        n_primitives = len(orb["alphas"])
+        pos = jnp.array(self.position).astype(float)
+        return jnp.stack( [jnp.concatenate([orb["coefficients"][i:(i+1)], pos, orb["lmn"], orb["alphas"][i:(i+1)]]) for i in range(n_primitives)] )
+    
+class Structure:
+    """provides a convenience DSL for building a structure / molecule"""
+    def __init__(self):
+        self.orbitals = []
+        self._nuclei_charges_positions = []
+        
+    def add_orbital(self, orb : Orbital, atom: str):
+        self.orbitals.append(orb.array)
+        self._nuclei_charges_positions = [AtomChargeMap[atom], orb.position]
+        return self
+        
+    def add_orbitals(self, orbs : list[Orbital], atom : str):
+        for orb in orbs:
+            self.add_orbital(orb, atom)
+        return self
+
+    @property
+    def nuclei_charges_positions(self):
+        return list(set(self._nuclei_charges_positions))
