@@ -68,10 +68,9 @@ def test_contracted(tolerance =  1e-7):
     
     gs, cs = jnp.array(gaussians), jnp.array(coeffs)
     
-    l_max = 2*int(jnp.max(gs[:, 3:6])) + 2
-    
-    func = jax.jit(promote_two(lambda g1, g2, g3, g4 : interaction(g1, g2, g3, g4, l_max)))
-    
+    l_max = int(jnp.max(gs[:, 3:6])) + 1
+    func = matrix_elements(l_max)[3]
+
     val = func(cs[0], cs[1], cs[2], cs[3], gs[:3], gs[3:], gs[:3], gs[3:])    
 
     integrator = PyQInt()

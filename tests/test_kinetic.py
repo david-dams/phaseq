@@ -59,9 +59,8 @@ def test_contracted(tolerance =  1e-10):
     
     gs, cs = jnp.array(gaussians), jnp.array(coeffs)
     
-    l_max = int(jnp.max(gs[:, 3:6])) + 2
-    func = jax.jit(promote_one(lambda g1, g2 : kinetic(g1, g2, l_max)))
-
+    l_max = int(jnp.max(gs[:, 3:6])) + 1
+    func  = matrix_elements(l_max)[1]
     
     kinetic11= func(cs[0, :3], cs[0, :3], gs[:3], gs[:3])
     kinetic12= func(cs[0, :3], cs[1, 3:], gs[:3], gs[3:])

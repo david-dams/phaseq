@@ -6,11 +6,7 @@ from pyqint import PyQInt, gto, cgf
 from phaseq import *
 
 def test_primitive(tolerance = 1e-10):
-    """test primitive gaussian overlaps"""
-    
-    a1, l1, m1, n1, x1, y1, z1 =  0.2, 2, 1, 0, 0.2, 0.3, 0.1
-    a2, l2, m2, n2, x2, y2, z2 =  0.1, 1, 1, 2, 10., 0.1, 0.5
-
+    """test primitive gaussian overlaps"""    
     a1, l1, m1, n1, x1, y1, z1 =  0.2, 4, 1, 0, 0.2, 0.3, 0.1
     a2, l2, m2, n2, x2, y2, z2 =  0.1, 1, 1, 2, 10., 0.1, 0.5
     
@@ -62,8 +58,8 @@ def test_contracted(tolerance =  1e-10):
     
     gs, cs = jnp.array(gaussians), jnp.array(coeffs)
     
-    l_max = int(jnp.max(gs[:, 3:6]) + 1)
-    func = jax.jit(promote_one(lambda g1, g2 : overlap(g1, g2, l_max)))
+    l_max = int(jnp.max(gs[:, 3:6])) + 1
+    func = matrix_elements(l_max)[0]
 
     overlap11= func(cs[0, :3], cs[0, :3], gs[:3], gs[:3])    
     overlap12= func(cs[0, :3], cs[1, 3:], gs[:3], gs[3:])

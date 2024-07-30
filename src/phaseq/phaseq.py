@@ -335,3 +335,66 @@ def interaction(gaussian1, gaussian2, gaussian3, gaussian4, l_max):
     prefac = 2.0 * jnp.pow(jnp.pi, 2.5) / (gamma1 * gamma2 * jnp.sqrt(gamma1 + gamma2)) * jnp.exp(-a1*a2*rab2/gamma1) * jnp.exp(-a3*a4*rcd2/gamma2)
 
     return prefac * (f_arr @ conv)
+
+### CONTRACTED GAUSSIANS ###
+def promote_one(f):
+    """one electron matrix element promotion"""
+    def element(coeff1, coeff2, g1, g2):        
+        c1 = get_norms_coefficients(g1, coeff1)
+        c2 = get_norms_coefficients(g2, coeff2)        
+        return jnp.einsum('k,l,kl->', c1, c2, f_vmapped(g2, g1))
+    
+    f_vmapped = jax.vmap(jax.vmap(lambda g1, g2 : f(g1, g2), (0, None), 0), (None, 0), 0)
+    
+    return element
+
+def promote_nuclear(f):
+    """nuclear electron matrix element promotion"""
+    def element(coeff1, coeff2, g1, g2, nuc_c_p):        
+        c1 = get_norms_coefficients(g1, coeff1)
+        c2 = get_norms_coefficients(g2, coeff2)
+        return nuc_c_p[0] * jnp.einsum('k,l,kl->', c1, c2, f_vmapped(g2, g1, nuc_c_p[1:]))
+    
+    f_vmapped = jax.vmap(jax.vmap(lambda g1, g2, n: f(g1, g2, n), (0, None, None), 0), (None, 0, None), 0)
+    
+    return element
+
+# TODO: rename to promote_interaction
+def promote_two(f):
+    """two electron matrix element promotion"""
+    def element(coeff1, coeff2, coeff3, coeff4, g1, g2, g3, g4):
+        c1 = get_norms_coefficients(g1, coeff1)
+        c2 = get_norms_coefficients(g2, coeff2)
+        c3 = get_norms_coefficients(g3, coeff3)
+        c4 = get_norms_coefficients(g4, coeff4)
+        
+        return jnp.einsum('i,j,k,l,ijkl->', c1, c2, c3, c4, f_vmapped(g4, g3, g2, g1))
+    
+    f_vmapped = jax.vmap(jax.vmap(jax.vmap(jax.vmap(lambda g1, g2, g3, g4 : f(g1, g2, g3, g4), (0, None, None, None), 0), (None, 0, None, None), 0), (None, None, 0, None), 0), (None, None, None, 0), 0)
+    
+    return element
+
+def get_norms_coefficients(gaussians, expansion):
+    """Computes the exact coefficients needed for converting primtive to contracted gaussian matrix elements. These simply include the norms of the primitive Gaussians.
+    
+    Args: 
+
+       gaussians : N x 7 array of primitive gaussians
+       expansion : N - array of basis coefficients     
+
+    Returns:
+    
+       N - array of norms * expansion
+    """
+    return expansion * jax.vmap(norm, (0,))(gaussians)
+
+def matrix_elements(l_max):
+    """Contracted gaussian matrix element functions"""
+
+    # promote functions
+    func_overlap = jax.jit(promote_one(lambda g1, g2 : overlap(g1, g2, l_max)))    
+    func_kinetic = jax.jit(promote_one(lambda g1, g2 : kinetic(g1, g2, l_max + 1)))
+    func_nuclear = jax.jit(promote_nuclear(lambda g1, g2, n: nuclear(g1, g2, n, 2*l_max)))
+    func_interaction = jax.jit(promote_two(lambda g1, g2, g3, g4 : interaction(g1, g2, g3, g4, 2*l_max)))
+    
+    return func_overlap, func_kinetic, func_nuclear, func_interaction

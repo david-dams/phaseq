@@ -64,17 +64,16 @@ def test_contracted(tolerance =  1e-10):
         [0., 0., 0., 0.4, 2., 7.],
     ]
     nx, ny, nz = 1, 2, 3.
-    nuc = jnp.array([nx, ny, nz])
+    nuc = jnp.array([1, nx, ny, nz])
     
     gs, cs = jnp.array(gaussians), jnp.array(coeffs)
     
-    l_max = int( 2 * jnp.max( jnp.concatenate([gs[3:], gs[:3]]) ) ) + 2
-    nuclear_jit = jax.jit(lambda g1, g2, nuc : nuclear(g1, g2, nuc, l_max))
-    func = jax.jit(promote_one(lambda g1, g2 : nuclear_jit(g1, g2, nuc)))
+    l_max = int(jnp.max(gs[:, 3:6])) + 1
+    func = matrix_elements(l_max)[2]
 
-    nuclear11= func(cs[0, :3], cs[0, :3], gs[:3], gs[:3])
-    nuclear12= func(cs[0, :3], cs[1, 3:], gs[:3], gs[3:])
-    nuclear22= func(cs[1, 3:], cs[1, 3:], gs[3:], gs[3:])
+    nuclear11= func(cs[0, :3], cs[0, :3], gs[:3], gs[:3], nuc)
+    nuclear12= func(cs[0, :3], cs[1, 3:], gs[:3], gs[3:], nuc)
+    nuclear22= func(cs[1, 3:], cs[1, 3:], gs[3:], gs[3:], nuc)
 
     integrator = PyQInt()
     
@@ -89,9 +88,9 @@ def test_contracted(tolerance =  1e-10):
     cgf2.add_gto(coeffs[1][5], gaussians[5][-1], *(gaussians[5][3:6]) )    
 
 
-    nuclear_ref11 = integrator.nuclear( cgf1, cgf1, nuc, 1)
-    nuclear_ref12 = integrator.nuclear( cgf1, cgf2, nuc, 1)
-    nuclear_ref22 = integrator.nuclear( cgf2, cgf2, nuc, 1)
+    nuclear_ref11 = integrator.nuclear( cgf1, cgf1, nuc[1:], 1)
+    nuclear_ref12 = integrator.nuclear( cgf1, cgf2, nuc[1:], 1)
+    nuclear_ref22 = integrator.nuclear( cgf2, cgf2, nuc[1:], 1)
 
     print(abs(nuclear_ref11 - nuclear11))
     print(abs(nuclear_ref12 - nuclear12))

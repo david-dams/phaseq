@@ -38,6 +38,10 @@ class Structure:
     def nuclei_charge_position(self):
         return list(set(orbitals))
 
+def get_l_max(basis):
+    # need to know maximum angular momentum for JIT
+    return int(jnp.concatenate([c[-1] for c in basis.values()]).max() + 1)
+    
 def get_atomic_charge(atom):
     charges = {
         'H': 1, 'He': 2, 'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O': 8, 'F': 9, 'Ne': 10,
