@@ -1,180 +1,78 @@
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import granad
 
-# LDOS(r, w) ~ Tr[Im[G(r, r, w)]]
-# (O + a) E = 1 => G = O (1 + O^{-1} a)^{-1}
-# extended hubbard model $H = h_0 + U n_in_j + V n_in_j$
-def energy(ham, pol, field, N):
-    vals, vecs = jnp.linalg.eigh(ham + pol @ field)
-    return vals[:N].sum()
+def rho_closed_shell(vecs, N):
+    return vecs[:, :N] @ vecs[:, :N].conj().T
 
-def plot_force(flake):
-    ham = flake.hamiltonian
-    pol = flake.dipole_operator
-    
-    z = 0  # Position along the beam propagation direction
-    w0 = 0.1  # Beam waist
-    wavelength = 0.0001  # Wavelength of the laser
+def get_dc_mf(coulomb):
+    def inner(rho):
+        # 2 U_{abbd} <Ad>
+        return 2 * jnp.diag( coulomb @ rho.diagonal() )
+    return inner
 
-    e_of_x = lambda x : energy(ham, pol, gaussian_beam_profile(x, z, w0, wavelength), N)
-    force = jax.grad(e_of_x)
+def trafo_symmetric():
+    overlap_vals, overlap_vecs = jnp.linalg.eigh(overlap)  
+    sqrt_overlap = jnp.diag(overlap_vals**(-0.5))
+    return overlap_vecs @ sqrt_overlap @ overlap_vecs.T
 
-    force[2].reshape()
-
-    plt.matshow(force)
-    plt.savefig("foo.pdf")
-    
-def dos(flake, scf_args, omegas):
-    pol_bare = flake.get_polarizability_rpa(omegas, 0, hungry = 1)
-
-    pol_cdw = flake.get_polarizability_rpa(omegas, 0, hungry = 1, args = scf_args)
-
-    plt.plot(omegas, pol_cdw.imag / pol_cdw.imag.max(), label = 'cdw' )
-    plt.plot(omegas, pol_bare.imag / pol_bare.imag.max()  , '--', label = 'fl')
-    plt.xlabel(r'$\omega$')
-    plt.ylabel("DOS")
-    plt.legend()
-    plt.savefig("cdw.pdf")
-    
-
-def scf_direct(ham, coulomb):
-    """performs direct-channel only scf calculation
+def scf_loop(overlap,
+             kinetic,
+             nuclear,
+             f_trafo,
+             f_rho,
+             f_mean_field,
+             mixing = 0.0,
+             limit = 1e-8,
+             max_steps = 100):
+    """performs closed-shell scf calculation
     
     Args:
-         ham : NxN overlap matrix
-         coulomb : NxN coulomb matrix
+        overlap : NxN array
+        nuclear : NxN array
+        kinetic : NxN array
+        f_trafo : Callable to produce the transformation matrix
+        f_mean_field : Callable with signature `f : rho -> ham_int` to produce the mean field term
+        f_rho : Callable with signature `f : evs -> ham` to produce the new density matrix
+        mixing : float, percentage of old density to be mixed in the update
+        precision : float, |rho - rho_old| < precision => break scf loop
 
-    Returns:
-        h_eff : effective hamiltonian
+    Returns: 
+        rho : scf density matrix
     """
 
-    # max number of iterations in sc loop
-    max_steps = 100
-    steps = 0
+    def update(rho_old, step, error):
+        """scf update"""
+
+        # initial effective hamiltonian
+        ham_eff = trafo.T @ (kinetic + nuclear + f_mean_field(rho_old)) @ trafo
+
+        # diagonalize
+        vals, vecs = jnp.linalg.eigh(ham_eff)    
+
+        # build new density matrix
+        rho = f_rho(trafo @ vecs)
+
+        # update breaks
+        error = jnp.linalg.norm(rho - rho_old)
+        step = jax.lax.cond(error <= limit, lambda: step, lambda: step + 1, step)
+
+        return rho, step, error
     
-    # numerical precision of sc solution
-    limit = 1e-8
-        
+    def step(res):
+        """single SCF update step"""
+        return jax.lax.cond(res[-1] <= limit, lambda: res, update, res)
+
+    # trafo orthogonalization
+    trafo = f_trafo(overlap)
+
     # initial guess for the density matrix
     rho_old = jnp.zeros_like(ham)
 
-    # initial effective hamiltonian
-    ham_eff = ham
+    # scf loop
+    rho, step, error = jax.lax.fori_loop(step, 0, max_steps, (rho_old, 0, jnp.inf))
 
-    # diagonalize
-    vals, vecs = jnp.linalg.eigh(ham_eff)    
-
-    # build new density matrix
-    N = int(ham.shape[0] / 2)
-    rho = vecs[:, :N] @ vecs[:, :N].conj().T
-
-    # iterate until convergence
-    while jnp.linalg.norm(rho - rho_old) >= limit and max_steps > steps:
-
-        # save last density matrix
-        rho_old = rho
-
-        # increment counter
-        steps += 1
-
-        # 2 U_{abbd} <Ad>
-        direct_term = 2 * jnp.diag( coulomb @ rho.diagonal() )
-
-        # new effective hamiltonian
-        ham_eff = ham + direct_term
-
-        # diagonalize
-        vals, vecs = jnp.linalg.eigh(ham_eff)
-
-        # new density matrix
-        rho = vecs[:, :N] @ vecs[:, :N].conj().T
-
-    print(f"After {steps} out of {max_steps}, scf finished with error {jnp.linalg.norm(rho - rho_old)}")
+    # intermediate stats
+    print(f"After {steps} out of {max_steps}, scf finished with error {error}")
     
-    return ham_eff, rho, vals, vecs
-
-def get_metal(t, U, V):
-    metal = (granad.Material("metal_1d")
-             .lattice_constant(1.)
-             .lattice_basis([
-                 [1, 0, 0],
-             ])
-             .add_orbital_species("up", s = 1)
-             .add_orbital(position=(0,), species="up")
-             .add_orbital_species("down", s = -1)
-             .add_orbital(position=(0,), species="down")
-             .add_interaction(
-                 "hamiltonian",
-                 participants=("up", "up"),
-                 parameters=[0.0, t],
-             )
-             .add_interaction(
-                 "hamiltonian",
-                 participants=("down", "down"),
-                 parameters=[0.0, t],
-             )
-             .add_interaction(
-                 "coulomb",
-                 participants=("down", "up"),
-                 parameters=[U, V],
-             )
-             .add_interaction(
-                 "coulomb",
-                 participants=("down", "up"),
-                 parameters=[U, V],
-             )
-             .add_interaction(
-                 "coulomb",
-                 participants=("down", "down"),
-                 parameters=[0., V],
-             )
-             .add_interaction(
-                 "coulomb",
-                 participants=("up", "up"),
-                 parameters=[0., V],
-             )
-             )
-    return metal
-
-if __name__ == "__main__":
-
-    # geometry
-    cells = 60
-
-    # parameters
-    t = 1
-    U = t / 2
-    V = t 
-
-    # set up material
-    metal = get_metal(t, U, V)
-
-    # set up chain
-    flake = metal.cut_flake(cells)
-
-    # half-filling
-    flake.set_electrons(cells)    
-    flake.set_open_shell()
-
-    # mean-field
-    ham_eff, rho, vals, vecs = scf_direct(flake.hamiltonian, flake.coulomb)
-
-    scf_args = granad.TDArgs(
-        hamiltonian = ham_eff,
-        energies = vals,
-        coulomb_scaled = flake.coulomb,
-        initial_density_matrix = rho,
-        stationary_density_matrix = flake.stationary_density_matrix,
-        eigenvectors = vecs,
-        dipole_operator = flake.dipole_operator,
-        electrons = flake.electrons,
-        relaxation_rate = 1/10,
-        propagator = None,
-        spin_degeneracy = 1.0,
-        positions = flake.positions        
-        )
-
-    omegas = jnp.linspace(0, flake.energies.max()*2, 10)
-    dos(flake, scf_args, omegas)
+    return rho
