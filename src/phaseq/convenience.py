@@ -61,39 +61,3 @@ def get_atomic_charge(atom):
         'Nh': 113, 'Fl': 114, 'Mc': 115, 'Lv': 116, 'Ts': 117, 'Og': 118
     }
     return charges[atom]
-
-
-def expand_gaussian(orb_list, expansion):
-    """converts OrbitalList into a representation compatible with gaussian integration.
-    
-    Args:
-    orb_list: OrbtalList 
-    expansion: dictionary mapping group ids to arrays
-    
-    Returns:
-    """
-    
-    # translate orbital list to array representation
-    orbitals = jnp.array( [jnp.concatenate([jnp.concatenate(expansion[o.group_id]), o.position]) for o in orb_list] )
-
-    # size of coefficients for unpacking array arguments
-    coeff_size = expansion[orb_list[0].group_id][0].size
-
-    # array representation of nuclei, index map to keep track of orbitals => nuclei
-    nuclei_positions, idxs, orbitals_to_nuclei = jnp.unique(orbitals[:,:3], axis = 0, return_index = True, return_inverse = True)
-    nuclei_charges = jnp.array([float(get_atomic_charge(o.atom_name)) for o in orb_list])[idxs]
-    nuclei = jnp.hstack( [nuclei_positions, nuclei_charges[:,None]] )
-
-    # max l for static loops compatible with JIT+reverse AD
-    l_max = orbitals[3:6].max()
-
-    # gto funcs 
-    overlap, kinetic, nuclear, repulsion = get_gaussian_functions(l_max)
-
-    # cgf expansion
-    overlap = one_body_wrapper(get_overlap(l_max), coeff_size)
-    kinetic = one_body_wrapper(get_kinetic(l_max), coeff_size)
-    nuclear = one_body_wrapper(get_nuclear(l_max), coeff_size)
-    repulsion = two_body_wrapper(get_repulsion(l_max), coeff_size)
-    
-    return overlap, kinetic, nuclear, repulsion, orbitals, nuclei, orbitals_to_nuclei
