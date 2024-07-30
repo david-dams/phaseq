@@ -339,10 +339,19 @@ def interaction(gaussian1, gaussian2, gaussian3, gaussian4, l_max):
 ### CONTRACTED GAUSSIANS ###
 def promote_one(f):
     """one electron matrix element promotion"""
-    def element(coeff1, coeff2, g1, g2):        
-        c1 = get_norms_coefficients(g1, coeff1)
-        c2 = get_norms_coefficients(g2, coeff2)        
-        return jnp.einsum('k,l,kl->', c1, c2, f_vmapped(g2, g1))
+    def element(cgf1, cgf2):
+        """one electron matrix element
+        
+        Args :
+             cgf1 : contracted gaussian function [ [c, primitive] ]
+             cgf2 : contracted gaussian function [ [c, primitive] ]
+
+        Returns :
+             matrix element, float
+        """
+        c1 = get_norms_coefficients(cgf1)
+        c2 = get_norms_coefficients(cgf2)        
+        return jnp.einsum('k,l,kl->', c1, c2, f_vmapped(cgf2[:, 1:], cgf1[:, 1:]))
     
     f_vmapped = jax.vmap(jax.vmap(lambda g1, g2 : f(g1, g2), (0, None), 0), (None, 0), 0)
     
@@ -350,10 +359,20 @@ def promote_one(f):
 
 def promote_nuclear(f):
     """nuclear electron matrix element promotion"""
-    def element(coeff1, coeff2, g1, g2, nuc_c_p):        
-        c1 = get_norms_coefficients(g1, coeff1)
-        c2 = get_norms_coefficients(g2, coeff2)
-        return nuc_c_p[0] * jnp.einsum('k,l,kl->', c1, c2, f_vmapped(g2, g1, nuc_c_p[1:]))
+    def element(cgf1, cgf2, nuc_c_p):        
+        """one electron matrix element
+        
+        Args :
+             cgf1 : contracted gaussian function [ [c, primitive] ]
+             cgf2 : contracted gaussian function [ [c, primitive] ]
+             nuc_c_p : array of nuclear charge and position [q, pos]
+
+        Returns :
+             matrix element, float
+        """
+        c1 = get_norms_coefficients(cgf1)
+        c2 = get_norms_coefficients(cgf2)
+        return nuc_c_p[0] * jnp.einsum('k,l,kl->', c1, c2, f_vmapped(cgf2[:, 1:], cgf1[:, 1:], nuc_c_p[1:]))
     
     f_vmapped = jax.vmap(jax.vmap(lambda g1, g2, n: f(g1, g2, n), (0, None, None), 0), (None, 0, None), 0)
     
@@ -362,31 +381,42 @@ def promote_nuclear(f):
 # TODO: rename to promote_interaction
 def promote_two(f):
     """two electron matrix element promotion"""
-    def element(coeff1, coeff2, coeff3, coeff4, g1, g2, g3, g4):
-        c1 = get_norms_coefficients(g1, coeff1)
-        c2 = get_norms_coefficients(g2, coeff2)
-        c3 = get_norms_coefficients(g3, coeff3)
-        c4 = get_norms_coefficients(g4, coeff4)
+    def element(cgf1, cgf2, cgf3, cgf4):
+        """two electron matrix element
         
-        return jnp.einsum('i,j,k,l,ijkl->', c1, c2, c3, c4, f_vmapped(g4, g3, g2, g1))
+        Args :
+             cgf1 : contracted gaussian function [ [c, primitive] ]
+             cgf2 : contracted gaussian function [ [c, primitive] ]
+             cgf3 : contracted gaussian function [ [c, primitive] ]
+             cgf4 : contracted gaussian function [ [c, primitive] ]
+
+        Returns :
+             matrix element, float
+        """
+
+        c1 = get_norms_coefficients(cgf1)
+        c2 = get_norms_coefficients(cgf2)
+        c3 = get_norms_coefficients(cgf3)
+        c4 = get_norms_coefficients(cgf4)
+        
+        return jnp.einsum('i,j,k,l,ijkl->', c1, c2, c3, c4, f_vmapped(cgf4[:, 1:], cgf3[:, 1:], cgf2[:, 1:], cgf1[:, 1:]))
     
     f_vmapped = jax.vmap(jax.vmap(jax.vmap(jax.vmap(lambda g1, g2, g3, g4 : f(g1, g2, g3, g4), (0, None, None, None), 0), (None, 0, None, None), 0), (None, None, 0, None), 0), (None, None, None, 0), 0)
     
     return element
 
-def get_norms_coefficients(gaussians, expansion):
+def get_norms_coefficients(cgf):
     """Computes the exact coefficients needed for converting primtive to contracted gaussian matrix elements. These simply include the norms of the primitive Gaussians.
     
     Args: 
 
-       gaussians : N x 7 array of primitive gaussians
-       expansion : N - array of basis coefficients     
+       cgf : N x 8 array of contracted gaussians [coeff, primitive]
 
     Returns:
     
        N - array of norms * expansion
     """
-    return expansion * jax.vmap(norm, (0,))(gaussians)
+    return cgf[:, 0] * jax.vmap(norm, (0,))(cgf[:, 1:])
 
 def matrix_elements(l_max):
     """Contracted gaussian matrix element functions"""

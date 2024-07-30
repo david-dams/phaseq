@@ -40,42 +40,36 @@ def test_primitive(tolerance = 1e-10):
 def test_contracted(tolerance =  1e-10):
     """test contracted gaussian overlaps (i.e. primitive overlaps multiplied by coefficients and normalization factors)"""
 
-    # [x1, y1, z1, l1, m1, n1, a1]
-    gaussians = [
-            [0.2, 0.3, 0.1, 4, 1, 0, 0.2], 
-            [0.2, 0.3, 0.1, 3, 2, 1, 0.3], 
-            [0.2, 0.3, 0.1, 2, 3, 2, 0.4],
+    # [c1, x1, y1, z1, l1, m1, n1, a1]
+    cgfs = [
+            [0.1, 0.2, 0.3, 0.1, 4, 1, 0, 0.2], 
+            [3., 0.2, 0.3, 0.1, 3, 2, 1, 0.3], 
+            [1., 0.2, 0.3, 0.1, 2, 3, 2, 0.4],
             
-            [0.5, 0.6, 0.4, 4, 1, 0, 0.5], 
-            [0.5, 0.6, 0.4, 3, 2, 1, 0.6], 
-            [0.5, 0.6, 0.4, 2, 3, 2, 0.7] 
+            [0.4, 0.5, 0.6, 0.4, 4, 1, 0, 0.5], 
+            [2., 0.5, 0.6, 0.4, 3, 2, 1, 0.6], 
+            [7., 0.5, 0.6, 0.4, 2, 3, 2, 0.7] 
     ]
-
-    coeffs = [
-        [0.1, 3., 1., 0., 0., 0.],
-        [0., 0., 0., 0.4, 2., 7.],
-    ]    
+    cgfs = jnp.array(cgfs)
     
-    gs, cs = jnp.array(gaussians), jnp.array(coeffs)
-    
-    l_max = int(jnp.max(gs[:, 3:6])) + 1
+    l_max = int(jnp.max(cgfs[:, 4:7])) + 1
     func = matrix_elements(l_max)[0]
-
-    overlap11= func(cs[0, :3], cs[0, :3], gs[:3], gs[:3])    
-    overlap12= func(cs[0, :3], cs[1, 3:], gs[:3], gs[3:])
-    overlap22= func(cs[1, 3:], cs[1, 3:], gs[3:], gs[3:])    
+    
+    overlap11= func(cgfs[:3], cgfs[:3])    
+    overlap12= func(cgfs[:3], cgfs[3:])
+    overlap22= func(cgfs[3:], cgfs[3:])    
 
     integrator = PyQInt()
     
-    cgf1 = cgf(gaussians[0][:3])
-    cgf1.add_gto(coeffs[0][0], gaussians[0][-1], *(gaussians[0][3:6]) )
-    cgf1.add_gto(coeffs[0][1], gaussians[1][-1], *(gaussians[1][3:6]) )
-    cgf1.add_gto(coeffs[0][2], gaussians[2][-1], *(gaussians[2][3:6]) )
+    cgf1 = cgf(cgfs[0,1:4])
+    cgf1.add_gto(cgfs[0,0], cgfs[0,-1], *(cgfs[0,4:7].astype(int).tolist()) )
+    cgf1.add_gto(cgfs[1,0], cgfs[1,-1], *(cgfs[1,4:7].astype(int).tolist()) )
+    cgf1.add_gto(cgfs[2,0], cgfs[2,-1], *(cgfs[2,4:7].astype(int).tolist()) )
     
-    cgf2 = cgf(gaussians[3][:3])
-    cgf2.add_gto(coeffs[1][3], gaussians[3][-1], *(gaussians[3][3:6]) )
-    cgf2.add_gto(coeffs[1][4], gaussians[4][-1], *(gaussians[4][3:6]) )
-    cgf2.add_gto(coeffs[1][5], gaussians[5][-1], *(gaussians[5][3:6]) )    
+    cgf2 = cgf(cgfs[3,1:4])
+    cgf2.add_gto(cgfs[3,0], cgfs[3,-1], *(cgfs[3,4:7].astype(int).tolist()))
+    cgf2.add_gto(cgfs[4,0], cgfs[4,-1], *(cgfs[4,4:7].astype(int).tolist()))
+    cgf2.add_gto(cgfs[5,0], cgfs[5,-1], *(cgfs[5,4:7].astype(int).tolist()))    
 
     overlap_ref11 = integrator.overlap( cgf1, cgf1 )
     overlap_ref12 = integrator.overlap( cgf1, cgf2 )
@@ -116,31 +110,31 @@ def test_derivative( tolerance = 1e-4):
 def test_derivative_contracted(tolerance =  1e-4):
     """test contracted gaussian overlaps (i.e. primitive overlaps multiplied by coefficients and normalization factors)"""
 
-    gaussians = [
-            [0.2, 0.3, 0.1, 4, 1, 0, 0.2], 
-            [0.2, 0.3, 0.1, 3, 2, 1, 0.3], 
-            [0.2, 0.3, 0.1, 2, 3, 2, 0.4],
+    # [c1, x1, y1, z1, l1, m1, n1, a1]
+    cgfs = [
+            [0.1, 0.2, 0.3, 0.1, 4, 1, 0, 0.2], 
+            [3., 0.2, 0.3, 0.1, 3, 2, 1, 0.3], 
+            [1., 0.2, 0.3, 0.1, 2, 3, 2, 0.4],
             
-            [0.5, 0.6, 0.4, 4, 1, 0, 0.5], 
-            [0.5, 0.6, 0.4, 3, 2, 1, 0.6], 
-            [0.5, 0.6, 0.4, 2, 3, 2, 0.7] 
+            [0.4, 0.5, 0.6, 0.4, 4, 1, 0, 0.5], 
+            [2., 0.5, 0.6, 0.4, 3, 2, 1, 0.6], 
+            [7., 0.5, 0.6, 0.4, 2, 3, 2, 0.7] 
     ]
-
-    coeffs = [
-        [0.1, 3., 1., 0., 0., 0.],
-        [0., 0., 0., 0.4, 2., 7.],
-    ]    
+    cgfs = jnp.array(cgfs)
     
-    x1, y1, z1 =  gaussians[0][4:]
-    x2, y2, z2 =  gaussians[3][4:]
-
-    gs, cs = jnp.array(gaussians), jnp.array(coeffs)
+    l_max = int(jnp.max(cgfs[:, 4:7])) + 1
+    func_mat = matrix_elements(l_max)[0]
     
-    l_max = int(jnp.max(gs[:, 3:6]) + 1)
-    func = jax.jit(lambda x : promote_one(lambda g1, g2 : overlap(g1.at[:3].set(x), g2, l_max))(cs[0, :3], cs[1, 3:], gs[:3], gs[3:]))
+    x1, y1, z1 =  cgfs[0, 1:4]
+    x2, y2, z2 =  cgfs[3, 1:4]
+
+    cgf1 = cgfs[:3]
+    cgf2 = cgfs[3:]
+    
+    func = lambda x : func_mat(cgf1.at[:, 1:4].set(x), cgf2)
     grad = jax.jit(jax.jacrev(func))
     g = grad(jnp.array([x2, y2, z2]))
-    
+
     eps = 1e-8
     num = (func(jnp.array([x2 + eps, y2, z2])) - func(jnp.array([x2, y2, z2]))) / eps    
     print(abs(g[0] - num))

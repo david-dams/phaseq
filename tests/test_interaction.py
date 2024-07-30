@@ -49,51 +49,60 @@ def test_primitive(tolerance = 1e-10):
             
 def test_contracted(tolerance =  1e-7):
     """test contracted gaussian interactions (i.e. primitive interactions multiplied by coefficients and normalization factors)"""
-    gaussians = [
-            [0.2, 0.3, 0.1, 4, 1, 0, 0.2], 
-            [0.2, 0.3, 0.1, 3, 2, 1, 0.3], 
-            [0.2, 0.3, 0.1, 2, 3, 2, 0.4],
-            
-            [0.5, 0.6, 0.4, 4, 1, 0, 0.5], 
-            [0.5, 0.6, 0.4, 3, 2, 1, 0.6], 
-            [0.5, 0.6, 0.4, 2, 3, 2, 0.7] 
+
+    # [c1, x1, y1, z1, l1, m1, n1, a1]
+    cgfs = [
+        [0.1, 0.2, 0.3, 0.1, 4, 1, 0, 0.2], 
+        [3., 0.2, 0.3, 0.1, 3, 2, 1, 0.3], 
+        [1., 0.2, 0.3, 0.1, 2, 3, 2, 0.4],
+        
+        [0.4, 0.5, 0.6, 0.4, 4, 1, 0, 0.5], 
+        [2., 0.5, 0.6, 0.4, 3, 2, 1, 0.6], 
+        [7., 0.5, 0.6, 0.4, 2, 3, 2, 0.7],
+        
+        [0.3, 0.2, 0.3, 0.1, 4, 1, 0, 0.2], 
+        [4., 0.2, 0.3, 0.1, 3, 2, 1, 0.3], 
+        [0.1, 0.2, 0.3, 0.1, 2, 3, 2, 0.4],
+        
+        [0.7, 0.5, 0.6, 0.4, 4, 1, 0, 0.5], 
+        [1., 0.5, 0.6, 0.4, 3, 2, 1, 0.6], 
+        [2., 0.5, 0.6, 0.4, 2, 3, 2, 0.7] 
+
     ]
-
-    coeffs = [
-        [0.1, 3., 1.,],
-        [0.4, 2., 7.],
-        [0.3, 4., 0.1,],
-        [0.7, 1., 2.],
-    ]    
     
-    gs, cs = jnp.array(gaussians), jnp.array(coeffs)
+    cgfs = jnp.array(cgfs)
     
-    l_max = int(jnp.max(gs[:, 3:6])) + 1
+    l_max = int(jnp.max(cgfs[:, 4:7])) + 1
     func = matrix_elements(l_max)[3]
+    
+    cgf1 = cgfs[:3]
+    cgf2 = cgfs[3:6]
+    cgf3 = cgfs[6:9]
+    cgf4 = cgfs[9:]
 
-    val = func(cs[0], cs[1], cs[2], cs[3], gs[:3], gs[3:], gs[:3], gs[3:])    
+    val = func(cgf1, cgf2, cgf3, cgf4)    
 
     integrator = PyQInt()
     
-    cgf1 = cgf(gaussians[0][:3])
-    cgf1.add_gto(coeffs[0][0], gaussians[0][-1], *(gaussians[0][3:6]) )
-    cgf1.add_gto(coeffs[0][1], gaussians[1][-1], *(gaussians[1][3:6]) )
-    cgf1.add_gto(coeffs[0][2], gaussians[2][-1], *(gaussians[2][3:6]) )
+    cgf1 = cgf(cgfs[0,1:4])
+    cgf1.add_gto(cgfs[0,0], cgfs[0,-1], *(cgfs[0,4:7].astype(int).tolist()) )
+    cgf1.add_gto(cgfs[1,0], cgfs[1,-1], *(cgfs[1,4:7].astype(int).tolist()) )
+    cgf1.add_gto(cgfs[2,0], cgfs[2,-1], *(cgfs[2,4:7].astype(int).tolist()) )
     
-    cgf2 = cgf(gaussians[3][:3])
-    cgf2.add_gto(coeffs[1][0], gaussians[3][-1], *(gaussians[3][3:6]) )
-    cgf2.add_gto(coeffs[1][1], gaussians[4][-1], *(gaussians[4][3:6]) )
-    cgf2.add_gto(coeffs[1][2], gaussians[5][-1], *(gaussians[5][3:6]) )    
+    cgf2 = cgf(cgfs[3,1:4])
+    cgf2.add_gto(cgfs[3,0], cgfs[3,-1], *(cgfs[3,4:7].astype(int).tolist()))
+    cgf2.add_gto(cgfs[4,0], cgfs[4,-1], *(cgfs[4,4:7].astype(int).tolist()))
+    cgf2.add_gto(cgfs[5,0], cgfs[5,-1], *(cgfs[5,4:7].astype(int).tolist()))    
+
+    cgf3 = cgf(cgfs[6,1:4])
+    cgf3.add_gto(cgfs[6,0], cgfs[6,-1], *(cgfs[6,4:7].astype(int).tolist()) )
+    cgf3.add_gto(cgfs[7,0], cgfs[7,-1], *(cgfs[7,4:7].astype(int).tolist()) )
+    cgf3.add_gto(cgfs[8,0], cgfs[8,-1], *(cgfs[8,4:7].astype(int).tolist()) )
     
-    cgf3 = cgf(gaussians[0][:3])
-    cgf3.add_gto(coeffs[2][0], gaussians[0][-1], *(gaussians[0][3:6]) )
-    cgf3.add_gto(coeffs[2][1], gaussians[1][-1], *(gaussians[1][3:6]) )
-    cgf3.add_gto(coeffs[2][2], gaussians[2][-1], *(gaussians[2][3:6]) )
-    
-    cgf4 = cgf(gaussians[3][:3])
-    cgf4.add_gto(coeffs[3][0], gaussians[3][-1], *(gaussians[3][3:6]) )
-    cgf4.add_gto(coeffs[3][1], gaussians[4][-1], *(gaussians[4][3:6]) )
-    cgf4.add_gto(coeffs[3][2], gaussians[5][-1], *(gaussians[5][3:6]) )    
+    cgf4 = cgf(cgfs[9,1:4])
+    cgf4.add_gto(cgfs[9,0], cgfs[9,-1], *(cgfs[9,4:7].astype(int).tolist()))
+    cgf4.add_gto(cgfs[10,0], cgfs[10,-1], *(cgfs[10,4:7].astype(int).tolist()))
+    cgf4.add_gto(cgfs[11,0], cgfs[11,-1], *(cgfs[11,4:7].astype(int).tolist()))    
 
     ref = integrator.repulsion(cgf1, cgf2, cgf3, cgf4)
 
@@ -135,29 +144,41 @@ def test_derivative(tolerance = 1e-4):
 def test_derivative_contracted(tolerance = 1e-1):
     """test contracted gaussian interactions (i.e. primitive interactions multiplied by coefficients and normalization factors)"""
 
-    gaussians = [
-            [0.2, 0.3, 0.1, 4, 1, 0, 0.2], 
-            [0.2, 0.3, 0.1, 3, 2, 1, 0.3], 
-            [0.2, 0.3, 0.1, 2, 3, 2, 0.4],
-            
-            [0.5, 0.6, 0.4, 4, 1, 0, 0.5], 
-            [0.5, 0.6, 0.4, 3, 2, 1, 0.6], 
-            [0.5, 0.6, 0.4, 2, 3, 2, 0.7] 
-    ]
+    # [c1, x1, y1, z1, l1, m1, n1, a1]
+    cgfs = [
+        [0.1, 0.2, 0.3, 0.1, 4, 1, 0, 0.2], 
+        [3., 0.2, 0.3, 0.1, 3, 2, 1, 0.3], 
+        [1., 0.2, 0.3, 0.1, 2, 3, 2, 0.4],
+        
+        [0.4, 0.5, 0.6, 0.4, 4, 1, 0, 0.5], 
+        [2., 0.5, 0.6, 0.4, 3, 2, 1, 0.6], 
+        [7., 0.5, 0.6, 0.4, 2, 3, 2, 0.7],
+        
+        [0.3, 0.2, 0.3, 0.1, 4, 1, 0, 0.2], 
+        [4., 0.2, 0.3, 0.1, 3, 2, 1, 0.3], 
+        [0.1, 0.2, 0.3, 0.1, 2, 3, 2, 0.4],
+        
+        [0.7, 0.5, 0.6, 0.4, 4, 1, 0, 0.5], 
+        [1., 0.5, 0.6, 0.4, 3, 2, 1, 0.6], 
+        [2., 0.5, 0.6, 0.4, 2, 3, 2, 0.7] 
 
-    coeffs = [
-        [0.1, 3., 1.,],
-        [0.4, 2., 7.],
-        [0.3, 4., 0.1,],
-        [0.7, 1., 2.],
-    ]    
+    ]
     
-    gs, cs = jnp.array(gaussians), jnp.array(coeffs)
+    cgfs = jnp.array(cgfs)
     
-    l_max = 2*int(jnp.max(gs[:, 3:6])) + 2
-    func = lambda x : promote_two(lambda g1, g2, g3, g4 : interaction(g1.at[:3].set(x), g2.at[:3].set(x), g3.at[:3].set(x), g4, l_max))(cs[0], cs[1], cs[2], cs[3], gs[:3], gs[3:], gs[:3], gs[3:])
+    l_max = int(jnp.max(cgfs[:, 4:7])) + 1
+    func_mat = matrix_elements(l_max)[3]
+    
+    cgf1 = cgfs[:3]
+    cgf2 = cgfs[3:6]
+    cgf3 = cgfs[6:9]
+    cgf4 = cgfs[9:]
+    
+    x1, y1, z1 =  cgfs[0, 1:4]
+    x2, y2, z2 =  cgfs[3, 1:4]
+
+    func = lambda x : func_mat(cgf1.at[:,1:4].set(x), cgf2.at[:, 1:4].set(x), cgf3.at[:, 1:4].set(x), cgf4)
     grad = jax.jit(jax.jacrev(func))
-    x2,y2,z2 = gs[3, :3]
     g = grad(jnp.array([x2, y2, z2]))
     
     eps = 1e-10
@@ -166,7 +187,6 @@ def test_derivative_contracted(tolerance = 1e-1):
     assert np.isclose(g[0], num, rtol=tolerance)
 
     # at same position
-    x1,y1,z1 = gs[0, :3]
     g = grad(jnp.array([x1, y1, z1]))
     num = (func(jnp.array([x1 + eps, y1, z1])) - func(jnp.array([x1, y1, z1]))) / eps
     print(abs(g[0] - num))
