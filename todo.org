@@ -3,7 +3,7 @@
 + test on GPU
   
 ** AD
-+ seems to mostly work, but zeros out for diagonals in S, T and orbitals on same nucleus for V, U might be fine, what is going on?
++ seems to mostly work, but zeros out for diagonals (i.e. identical positions) in S, T and orbitals on same nucleus for V, U might be fine, what is going on?
 
 * SCF
 + implement simple HF
