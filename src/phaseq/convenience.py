@@ -1,4 +1,6 @@
 import dataclasses as dc
+from collections import defaultdict
+from functools import reduce
 
 import jax
 import jax.numpy as jnp
@@ -77,11 +79,16 @@ class Structure:
     """provides a convenience DSL for building a structure / molecule"""
     def __init__(self):
         self.orbitals = []
-        self._nuclei_charges_positions = []
+        self._nuclei_charges_positions = defaultdict(list)
+
+    def __str__(self):
+        return self.xyz
         
     def add_orbital(self, orb : Orbital, atom: str):
         self.orbitals.append(orb.array)
-        self._nuclei_charges_positions = [AtomChargeMap[atom], orb.position]
+        charge = AtomChargeMap[atom]
+        charge_pos = tuple([charge] + jnp.array(orb.position).astype(float).tolist())
+        self._nuclei_charges_positions[atom].append(charge_pos)
         return self
         
     def add_orbitals(self, orbs : list[Orbital], atom : str):
@@ -90,5 +97,42 @@ class Structure:
         return self
 
     @property
+    def xyz(self):
+        total_atoms = len(self._nuclei_charges_positions)
+        tail = '\n'.join(set([ ' '.join([name] + list(map(str,el[1:]))) for name, lst in self._nuclei_charges_positions.items() for el in lst]))        
+        return f"{total_atoms}\n{tail}"
+
+    @property
     def nuclei_charges_positions(self):
-        return list(set(self._nuclei_charges_positions))
+        """obtain nuclei charges and positions as an array of shape N x 4"""
+        return jnp.array(reduce(lambda x,y : x+y, [list(set(values)) for values in self._nuclei_charges_positions.values()]))
+        
+    def scf(self, basis, **kwargs):
+        
+        sto3g = Basis("sto_3g")
+        f_overlap, f_kinetic, f_nuclear, f_interaction = matrix_elements(sto3g.l_max)
+        
+        overlap_matrix = f_overlap(self.orbitals, self.orbitals)
+        kinetic_matrix = f_kinetic(self.orbitals, self.orbitals)
+        nuclear_matrix = f_nuclear(self.orbitals, self.orbitals, self.nuclei_charge_position)
+        interaction_matrix = f_interaction(self.orbitals, self.orbitals, self.orbitals, self.orbitals)
+
+        mf_default = lambda rho : jnp.einsum('abcd,cd->ab', interaction_matrix, rho)
+        rho_default = lambda rho : rho_closed_shell(rho, overlap_matrix.shape[0] // 2)
+        
+        f_mean_field = kwargs.get("f_mean_field", mf_default)
+        f_rho = kwargs.get("f_rho", rho_default)
+        f_trafo = kwargs.get("f_trafo", trafo_symmetric)
+        mixing = kwargs.get("mixing", 0.0)
+        limit = kwargs.get("limit", 1e-8)
+        max_steps = kwargs.get("max_steps", 100)
+
+        return scf_loop(overlap,
+                        kinetic,
+                        nuclear,
+                        f_trafo,
+                        f_rho,
+                        f_mean_field,
+                        mixing,
+                        limit,
+                        max_steps)
