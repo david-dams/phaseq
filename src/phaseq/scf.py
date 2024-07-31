@@ -1,6 +1,5 @@
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 
 def rho_closed_shell(vecs, N):
     return vecs[:, :N] @ vecs[:, :N].conj().T
@@ -11,7 +10,7 @@ def get_dc_mf(coulomb):
         return 2 * jnp.diag( coulomb @ rho.diagonal() )
     return inner
 
-def trafo_symmetric():
+def trafo_symmetric(overlap):
     overlap_vals, overlap_vecs = jnp.linalg.eigh(overlap)  
     sqrt_overlap = jnp.diag(overlap_vals**(-0.5))
     return overlap_vecs @ sqrt_overlap @ overlap_vecs.T
@@ -22,9 +21,9 @@ def scf_loop(overlap,
              f_trafo,
              f_rho,
              f_mean_field,
-             mixing = 0.0,
-             limit = 1e-8,
-             max_steps = 100):
+             mixing,
+             limit,
+             max_steps):
     """performs closed-shell scf calculation
     
     Args:
