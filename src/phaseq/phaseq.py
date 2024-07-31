@@ -351,9 +351,9 @@ def promote_one(f):
         """
         c1 = get_norms_coefficients(cgf1)
         c2 = get_norms_coefficients(cgf2)        
-        return jnp.einsum('k,l,kl->', c1, c2, f_vmapped(cgf2[:, 1:], cgf1[:, 1:]))
+        return jnp.einsum('k,l,kl->', c1, c2, f_vmapped(cgf1[:, 1:], cgf2[:, 1:]))
     
-    f_vmapped = jax.vmap(jax.vmap(lambda g1, g2 : f(g1, g2), (0, None), 0), (None, 0), 0)
+    f_vmapped = vmap_2(f)
     
     return element
 
@@ -372,9 +372,9 @@ def promote_nuclear(f):
         """
         c1 = get_norms_coefficients(cgf1)
         c2 = get_norms_coefficients(cgf2)
-        return nuc_c_p[0] * jnp.einsum('k,l,kl->', c1, c2, f_vmapped(cgf2[:, 1:], cgf1[:, 1:], nuc_c_p[1:]))
+        return nuc_c_p[0] * jnp.einsum('k,l,kl->', c1, c2, f_vmapped(cgf1[:, 1:], cgf2[:, 1:], nuc_c_p[1:]))
     
-    f_vmapped = jax.vmap(jax.vmap(lambda g1, g2, n: f(g1, g2, n), (0, None, None), 0), (None, 0, None), 0)
+    f_vmapped = jax.vmap(jax.vmap(lambda g1, g2, n: f(g1, g2, n), (None, 0, None), 0), (0, None, None), 0)
     
     return element
 
@@ -399,11 +399,20 @@ def promote_two(f):
         c3 = get_norms_coefficients(cgf3)
         c4 = get_norms_coefficients(cgf4)
         
-        return jnp.einsum('i,j,k,l,ijkl->', c1, c2, c3, c4, f_vmapped(cgf4[:, 1:], cgf3[:, 1:], cgf2[:, 1:], cgf1[:, 1:]))
+        return jnp.einsum('i,j,k,l,ijkl->', c1, c2, c3, c4, f_vmapped(cgf1[:, 1:], cgf2[:, 1:], cgf3[:, 1:], cgf4[:, 1:]))
     
-    f_vmapped = jax.vmap(jax.vmap(jax.vmap(jax.vmap(lambda g1, g2, g3, g4 : f(g1, g2, g3, g4), (0, None, None, None), 0), (None, 0, None, None), 0), (None, None, 0, None), 0), (None, None, None, 0), 0)
+    f_vmapped = vmap_4(f)
     
     return element
+
+def vmap_2(f):
+    return jax.vmap(jax.vmap(lambda g1, g2 : f(g1, g2), (None, 0), 0), (0, None), 0)
+
+def vmap_3(f):
+    return jax.vmap(jax.vmap(jax.vmap(lambda g1, g2 : f(g1, g2, g3), (None, None, 0), 0), (None, 0, None), 0), (0, None, None), 0)
+
+def vmap_4(f):
+    return jax.vmap(jax.vmap(jax.vmap(jax.vmap(lambda g1, g2, g3, g4 : f(g1, g2, g3, g4), (None, None, None, 0), 0), (None, None, 0, None), 0), (None, 0, None, None), 0), (0, None, None, None), 0)
 
 def get_norms_coefficients(cgf):
     """Computes the exact coefficients needed for converting primtive to contracted gaussian matrix elements. These simply include the norms of the primitive Gaussians.
@@ -426,5 +435,6 @@ def matrix_elements(l_max):
     func_kinetic = jax.jit(promote_one(lambda g1, g2 : kinetic(g1, g2, l_max + 1)))
     func_nuclear = jax.jit(promote_nuclear(lambda g1, g2, n: nuclear(g1, g2, n, 2*l_max)))
     func_interaction = jax.jit(promote_two(lambda g1, g2, g3, g4 : interaction(g1, g2, g3, g4, 2*l_max)))
+
     
     return func_overlap, func_kinetic, func_nuclear, func_interaction
