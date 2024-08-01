@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 
 def rho_closed_shell(vecs, N):
-    return vecs[:, :N] @ vecs[:, :N].conj().T
+    return 2*vecs[:, :N] @ vecs[:, :N].T
 
 def get_dc_mf(coulomb):
     def inner(rho):
@@ -40,38 +40,48 @@ def scf_loop(overlap,
         rho : scf density matrix
     """
 
-    def update(rho_old, step, error):
+    def energy(rho, ham_eff):
+         return 0.5 * jnp.einsum('ij,ji', rho, kinetic + nuclear + ham_eff)
+    
+    def update(arg):
         """scf update"""
+        
+        rho_old, step, error = arg
 
         # initial effective hamiltonian
-        ham_eff = trafo.T @ (kinetic + nuclear + f_mean_field(rho_old)) @ trafo
+        ham_eff =  kinetic + nuclear + f_mean_field(rho_old)
 
         # diagonalize
-        vals, vecs = jnp.linalg.eigh(ham_eff)    
+        vals, vecs = jnp.linalg.eigh(trafo.T @ ham_eff @ trafo)    
 
         # build new density matrix
-        rho = f_rho(trafo @ vecs)
+        rho = f_rho(trafo @ vecs) + mixing * rho_old
 
         # update breaks
+        error = jnp.abs(energy(rho, ham_eff) - energy(rho_old, ham_eff))
+
         error = jnp.linalg.norm(rho - rho_old)
-        step = jax.lax.cond(error <= limit, lambda: step, lambda: step + 1, step)
+
+        step = jax.lax.cond(error <= limit, lambda x: step, lambda x: step + 1, step)
 
         return rho, step, error
     
-    def step(res):
+    def step(idx, res):
         """single SCF update step"""
-        return jax.lax.cond(res[-1] <= limit, lambda: res, update, res)
+        return jax.lax.cond(res[-1] <= limit, lambda x: res, update, res)
 
     # trafo orthogonalization
     trafo = f_trafo(overlap)
 
     # initial guess for the density matrix
-    rho_old = jnp.zeros_like(ham)
+    rho_old = jnp.ones_like(overlap)
 
     # scf loop
-    rho, step, error = jax.lax.fori_loop(step, 0, max_steps, (rho_old, 0, jnp.inf))
+    rho, steps, error = jax.lax.fori_loop(0, max_steps, step, (rho_old, 0, jnp.inf))
 
     # intermediate stats
     print(f"After {steps} out of {max_steps}, scf finished with error {error}")
+
+    print(energy(rho, kinetic + nuclear + f_mean_field(rho)))
     
     return rho
