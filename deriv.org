@@ -49,7 +49,9 @@ In the following, we discuss how to obtain array-oriented primitive matrix eleme
 * Overlap
 The overlap matrix elements are given by
 
-$a \cdot \prod_i \sum_I b_I(l_1, l_2, \vec{d}_{AP}, \vec{d}_{BP}, i) c_I$
+\begin{align}
+S_{ij} = a \cdot \prod_i \sum_I b_I(l_1, l_2, \vec{d}_{AP}, \vec{d}_{BP}, i) c_I
+\end{align}
 
 where 
 
@@ -61,7 +63,10 @@ f_j(l_1, l_2, a, b) &= \partial^j_x (a+x)^{l_1} (a+x)^{l_2} \vert_{x=0}
 \end{align*}
 
 * Kinetic
-$\alpha_2 \cdot (2(l_2+m_2+n_2) + 3)S(l_2, m_2, n_2) - 2 \alpha_2^2(S(l_2+2,m_2,n_2) + S(l_2,m_2+2,n_2) + S(l_2,m_2,n_2+2)) - \frac{1}{2}( l_2(l_2-1)S(l_2-2, m_2, n_2) + m_2(m_2-2)S(l_2, m_2-2, n_2) + n_2(n_2 - 1)S(l_2, m_2, n_2-2))$
+
+\begin{align*}
+T_{ij} &= \alpha_2 \cdot (2(l_2+m_2+n_2) + 3)S(l_2, m_2, n_2) - 2 \alpha_2^2(S(l_2+2,m_2,n_2) + S(l_2,m_2+2,n_2) + S(l_2,m_2,n_2+2))\\ &- \frac{1}{2}( l_2(l_2-1)S(l_2-2, m_2, n_2) + m_2(m_2-2)S(l_2, m_2-2, n_2) + n_2(n_2 - 1)S(l_2, m_2, n_2-2))
+\end{align*}
 
 * Nuclear
 The first group of nesting levels can be written as
