@@ -1,5 +1,6 @@
 * Test
 + scf
++ AD: compare to pyqint
     
 * FIX
 + identical positions give wrong results
