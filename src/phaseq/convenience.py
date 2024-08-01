@@ -128,33 +128,4 @@ class Structure:
     @property
     def l_max(self):
         """maximum angular momentum used by the orbitals. Needed for JIT compilation of matrix elements"""
-        return int(jnp.max(jnp.concatenate([ orb[:, 1:4] for orb in self.orbitals]))) + 1
-        
-    def scf(self, **kwargs):
-        
-        f_overlap, f_kinetic, f_nuclear, f_interaction = matrix_elements_vmapped(self.l_max)
-        
-        overlap_matrix = f_overlap(self.orbitals, self.orbitals)
-        kinetic_matrix = f_kinetic(self.orbitals, self.orbitals)
-        nuclear_matrix = f_nuclear(self.orbitals, self.orbitals, self.nuclei_charge_position)
-        interaction_matrix = f_interaction(self.orbitals, self.orbitals, self.orbitals, self.orbitals)
-
-        mf_default = lambda rho : jnp.einsum('abcd,cd->ab', interaction_matrix, rho)
-        rho_default = lambda rho : rho_closed_shell(rho, overlap_matrix.shape[0] // 2)
-        
-        f_mean_field = kwargs.get("f_mean_field", mf_default)
-        f_rho = kwargs.get("f_rho", rho_default)
-        f_trafo = kwargs.get("f_trafo", trafo_symmetric)
-        mixing = kwargs.get("mixing", 0.0)
-        limit = kwargs.get("limit", 1e-8)
-        max_steps = kwargs.get("max_steps", 100)
-
-        return scf_loop(overlap,
-                        kinetic,
-                        nuclear,
-                        f_trafo,
-                        f_rho,
-                        f_mean_field,
-                        mixing,
-                        limit,
-                        max_steps)
+        return int(jnp.max(jnp.concatenate([ orb[:, 1:4] for orb in self.orbitals]))) + 1    
