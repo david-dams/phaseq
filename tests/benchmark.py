@@ -65,7 +65,7 @@ if __name__ == '__main__':
 
     # Define the second snippet as a function
     def snippet2():
-        func(c1, c2, c3, c4)
+        func(c1, c2, c3, c4).block_until_ready()
         
     # Use timeit to measure the execution time of each snippet
     time_snippet1 = timeit.timeit(snippet1, number=100)
