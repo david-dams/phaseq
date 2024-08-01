@@ -1,6 +1,7 @@
-import dataclasses as dc
 from collections import defaultdict
 from functools import reduce
+from itertools import product
+import json
 
 import jax
 import jax.numpy as jnp
@@ -23,58 +24,47 @@ AtomChargeMap = {
         'Es': 99, 'Fm': 100, 'Md': 101, 'No': 102, 'Lr': 103, 'Rf': 104, 'Db': 105,
         'Sg': 106, 'Bh': 107, 'Hs': 108, 'Mt': 109, 'Ds': 110, 'Rg': 111, 'Cn': 112,
         'Nh': 113, 'Fl': 114, 'Mc': 115, 'Lv': 116, 'Ts': 117, 'Og': 118
-    }
+    }    
 
-BasisMap ={
-    "sto_3g" : {
-        "pz" : { "coefficients" : jnp.array([ 0.155916, 0.607684, 0.391957 ]), 
-                 "alphas" : jnp.array( [ 2.941249, 0.683483, 0.22229 ]),
-                 "lmn" : jnp.array( [ 0,0,1 ]) } }
-    }
+def basis_from_json(json_file):
+    """converts json format basis set adhering to molssi_bse_schema, schema_version 0.1 to phaseq's internal basis representation"""
+
+    def get_matching_angular_momentum(l):        
+        """computes cartesian angular momentum arrays for l, i.e. l = 1 => [[0,0,1], [0, 1, 0], [1 0, 0]]"""
+        return list(map(list, filter(lambda x : sum(x) == l, product(range(l+1), range(l+1), range(l+1)))))
+
+    def parse_cgf(l, exps, cs):
+        return [[float(c)] + am + [float(exps[i])] for i, c in enumerate(cs) for am in angular_momentum_map[l]]
+
+    def parse_orbital(orbital):
+        """parses a single orbital. Returns a N_gaussians x 8 Array"""
+
+        cs = orbital["coefficients"]
+        am = orbital["angular_momentum"]
+        return jnp.array(reduce(lambda x,y : x+y,
+                      [parse_cgf(l, orbital["exponents"], cs[i]) for i, l in enumerate(am)]
+                      ))
+
+    def parse_element(orbitals):
+        """parses single element info. Returns N_orbitals x N_gaussians x 8 Array."""
+
+        return [parse_orbital(o) for o in orbitals]
+
+    def get_l_max(basis_json):
+        return max(reduce(lambda x,y: x+y, [z["angular_momentum"] for y in [x["electron_shells"] for x in basis_json["elements"].values()] for z in y]))
     
+    with open(json_file, "r") as f:
+        basis_json = json.load(f)
 
-class Basis:
-    """holds gaussian basis expansions. 
+    angular_momentum_map = [get_matching_angular_momentum(l) for l in range(get_l_max(basis_json)+1)]
+    atom_charge_list = list(AtomChargeMap.keys())
 
-    a basis is a dictionary mapping strings to JAX array tuples of the form 
+    basis = {}
+    for number, info in basis_json["elements"].items():
+        basis[atom_charge_list[int(number)-1]] = parse_element(info["electron_shells"])
 
-    orbital_name : (coefficients, alphas, lmn)
-    
-    such that the i-th cgf is 
+    return basis
 
-    [coefficients[i], position, lmn, alphas[i]]
-    """
-    def __init__(self, key):
-        self.basis = BasisMap[key]
-        
-    @property
-    def l_max(self):
-        """maximum angular momentum in the basis set. Needed for JIT compilation of matrix elements"""
-        return int(jnp.concatenate([c["lmn"] for c in self.basis.values()]).max()) + 1
-
-@dc.dataclass
-class Orbital:
-    """represents an orbital"""
-    name : str = None
-    basis : jax.Array = dc.field(default_factory=lambda : jnp.array([0, 0, 0]))
-    position : jax.Array = dc.field(default_factory=lambda : jnp.array([0, 0, 0]))
-
-    @property
-    def array(self):
-        """converts orbital to cgf array representation of the form
-
-        cgf = [ [coeff, primitive] ], where 
-        
-        coeff is the expansion coefficient for the primitive gaussian with array reprentation
-        
-        primitive = [pos, lmn, alpha]
-        """
-
-        orb = self.basis.basis[self.name]
-        n_primitives = len(orb["alphas"])
-        pos = jnp.array(self.position).astype(float)
-        return jnp.stack( [jnp.concatenate([orb["coefficients"][i:(i+1)], pos, orb["lmn"], orb["alphas"][i:(i+1)]]) for i in range(n_primitives)] )
-    
 class Structure:
     """provides a convenience DSL for building a structure / molecule"""
     def __init__(self):
@@ -84,33 +74,65 @@ class Structure:
     def __str__(self):
         return self.xyz
         
-    def add_orbital(self, orb : Orbital, atom: str):
-        self.orbitals.append(orb.array)
+    def add_orbital(self, orb : jax.Array, position : list, atom : str):                
+        position = jnp.array(position).astype(float)
+
+        assert position.shape == (3,), "Position must be 3-dim vector"
+        assert orb.ndim == 2 and orb.shape[-1] == 5, "Orb must be N x 5 array"
+        
+        orb = jnp.insert(orb, jnp.array([1]), position, axis=1)
+        self.orbitals.append(orb)
+        
         charge = AtomChargeMap[atom]
-        charge_pos = tuple([charge] + jnp.array(orb.position).astype(float).tolist())
+        charge_pos = tuple([charge] + position.tolist())
         self._nuclei_charges_positions[atom].append(charge_pos)
+        
         return self
         
-    def add_orbitals(self, orbs : list[Orbital], atom : str):
+    def add_orbitals(self, orbs : jax.Array, position : list, atom : str):
         for orb in orbs:
-            self.add_orbital(orb, atom)
+            self.add_orbital(orb, position, atom)
         return self
+
+    def add_atom(self, atom, position, name):
+        self.add_orbitals(atom, position, name)
+        return self
+
+    def process_line(self, basis : dict, line : str, fac : float):
+        splt = line.split()
+        if len(splt) != 4:
+            return
+        atom, position = splt[0], jnp.array(list(map(lambda x : fac * float(x), splt[1:])))
+        self.add_atom(basis[atom], position, atom)
+
+    @classmethod
+    def from_xyz(cls, basis : dict, filename : str, scale = 1.0):
+        c = cls()
+        with open(filename, "r") as f:
+            for l in f.readlines():
+                c.process_line(basis, l, scale)
+        return c
 
     @property
     def xyz(self):
-        total_atoms = len(self._nuclei_charges_positions)
-        tail = '\n'.join(set([ ' '.join([name] + list(map(str,el[1:]))) for name, lst in self._nuclei_charges_positions.items() for el in lst]))        
+        tail = set([ ' '.join([name] + list(map(str,el[1:]))) for name, lst in self._nuclei_charges_positions.items() for el in lst])
+        total_atoms = len(tail)
+        tail = '\n'.join(tail)
         return f"{total_atoms}\n{tail}"
 
     @property
     def nuclei_charges_positions(self):
         """obtain nuclei charges and positions as an array of shape N x 4"""
         return jnp.array(reduce(lambda x,y : x+y, [list(set(values)) for values in self._nuclei_charges_positions.values()]))
+
+    @property
+    def l_max(self):
+        """maximum angular momentum used by the orbitals. Needed for JIT compilation of matrix elements"""
+        return int(jnp.max(jnp.concatenate([ orb[:, 1:4] for orb in self.orbitals]))) + 1
         
-    def scf(self, basis, **kwargs):
+    def scf(self, **kwargs):
         
-        sto3g = Basis("sto_3g")
-        f_overlap, f_kinetic, f_nuclear, f_interaction = matrix_elements(sto3g.l_max)
+        f_overlap, f_kinetic, f_nuclear, f_interaction = matrix_elements_vmapped(self.l_max)
         
         overlap_matrix = f_overlap(self.orbitals, self.orbitals)
         kinetic_matrix = f_kinetic(self.orbitals, self.orbitals)
