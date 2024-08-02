@@ -1,6 +1,13 @@
 import jax
 import jax.numpy as jnp
 
+def get_mean_field(interaction_matrix):
+    
+    def inner(rho):
+        return jnp.einsum('kl,ijlk->ij', rho, interaction_matrix) - 0.5 * jnp.einsum('kl,iklj->ij', rho, interaction_matrix)
+
+    return inner
+
 def rho_closed_shell(vecs, N):
     return 2*vecs[:, :N] @ vecs[:, :N].T
 

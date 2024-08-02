@@ -6,7 +6,7 @@ import json
 import jax
 import jax.numpy as jnp
 
-from phaseq import *
+import phaseq as phaseq
 
 AtomChargeMap = {
         'H': 1, 'He': 2, 'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O': 8, 'F': 9, 'Ne': 10,
@@ -64,6 +64,23 @@ def basis_from_json(json_file):
         basis[atom_charge_list[int(number)-1]] = parse_element(info["electron_shells"])
 
     return basis
+
+# TODO: uff
+def matrix_functions(l_max, n_orbs, nuclei_charges_positions):
+    """wrap electron element functions to build matrices    
+    """    
+    # this is slightly awkward: a promoted nuclear element function maps orb x orb x nuc -> float, so we vmap and sum out the last axis, still closing over maximum angular momentum range
+    f = jax.vmap( lambda x, n : phaseq.promote_nuclear(lambda a, b, c: phaseq.nuclear(a, b, c, 2*l_max))(x[0], x[1], n), (None, 0), 0 )
+    func_nuclear = jax.jit(lambda x : f(x, nuclei_charges_positions).sum(axis = -1))
+    func_kinetic = jax.jit(lambda x : phaseq.promote_one(lambda a, b: phaseq.kinetic(a, b, l_max + 1))(x[0], x[1]))
+    func_overlap = jax.jit(lambda x : phaseq.promote_one(lambda a, b: phaseq.overlap(a, b, l_max))(x[0], x[1]))    
+    func_interaction = jax.jit(lambda x : phaseq.promote_two(lambda a, b, c, d: phaseq.interaction(a, b, c, d, 2*l_max))(x[0], x[1], x[2], x[3]))
+
+    func2 = lambda f : lambda lst: jnp.array(jax.tree.map(f, lst, is_leaf = lambda x: isinstance(x, tuple))).reshape(n_orbs, n_orbs)
+    func4 = lambda f : lambda lst: jnp.array(jax.tree.map(f, lst, is_leaf = lambda x: isinstance(x, tuple))).reshape(n_orbs, n_orbs, n_orbs, n_orbs)
+
+    return func2(func_overlap), func2(func_kinetic), func2(func_nuclear), func4(func_interaction)
+
 
 class Structure:
     """provides a convenience DSL for building a structure / molecule"""
@@ -128,4 +145,29 @@ class Structure:
     @property
     def l_max(self):
         """maximum angular momentum used by the orbitals. Needed for JIT compilation of matrix elements"""
-        return int(jnp.max(jnp.concatenate([ orb[:, 1:4] for orb in self.orbitals]))) + 1    
+        return int(jnp.max(jnp.concatenate([orb[:, 1:4] for orb in self.orbitals]))) + 1
+
+    @property
+    def arg2(self):
+        return list(product(self.orbitals,self.orbitals))
+    
+    @property
+    def arg4(self):
+        return list(product(self.orbitals,self.orbitals, self.orbitals,self.orbitals))
+
+    @property
+    def n_electrons(self):
+        return int(self.nuclei_charges_positions[:, 0].sum())
+                   
+    def scf(self, mixing = 0.0, tolerance = 1e-8, steps = 100):
+        overlap, kinetic, nuclear, interaction = matrix_functions(self.l_max, len(self.orbitals), self.nuclei_charges_positions)
+        n_max = self.n_electrons // 2    
+        return phaseq.scf_loop(overlap(self.arg2),
+                               kinetic(self.arg2),
+                               nuclear(self.arg2),
+                               phaseq.trafo_symmetric,
+                               lambda v : phaseq.rho_closed_shell(v, n_max),
+                               phaseq.get_mean_field(interaction(self.arg4)),
+                               mixing,
+                               tolerance,
+                               steps)

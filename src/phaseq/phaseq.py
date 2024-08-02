@@ -408,9 +408,6 @@ def promote_two(f):
 def vmap_2(f):
     return jax.vmap(jax.vmap(lambda g1, g2 : f(g1, g2), (None, 0), 0), (0, None), 0)
 
-def vmap_3(f):
-    return jax.vmap(jax.vmap(jax.vmap(lambda g1, g2 : f(g1, g2, g3), (None, None, 0), 0), (None, 0, None), 0), (0, None, None), 0)
-
 def vmap_4(f):
     return jax.vmap(jax.vmap(jax.vmap(jax.vmap(lambda g1, g2, g3, g4 : f(g1, g2, g3, g4), (None, None, None, 0), 0), (None, None, 0, None), 0), (None, 0, None, None), 0), (0, None, None, None), 0)
 
@@ -426,15 +423,3 @@ def get_norms_coefficients(cgf):
        N - array of norms * expansion
     """
     return cgf[:, 0] * jax.vmap(norm, (0,))(cgf[:, 1:])
-
-def matrix_elements(l_max):
-    """Contracted gaussian matrix element functions"""
-
-    # promote functions
-    func_overlap = jax.jit(promote_one(lambda g1, g2 : overlap(g1, g2, l_max)))    
-    func_kinetic = jax.jit(promote_one(lambda g1, g2 : kinetic(g1, g2, l_max + 1)))
-    func_nuclear = jax.jit(promote_nuclear(lambda g1, g2, n: nuclear(g1, g2, n, 2*l_max)))
-    func_interaction = jax.jit(promote_two(lambda g1, g2, g3, g4 : interaction(g1, g2, g3, g4, 2*l_max)))
-
-    
-    return func_overlap, func_kinetic, func_nuclear, func_interaction
