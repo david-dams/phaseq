@@ -3,9 +3,10 @@
 + AD: compare to pyqint
     
 * FIX
-+ identical positions give wrong results
++ AD: identical positions give wrong results
 
 * Hygiene
++ improve scf efficiency
 + doc strings for all functions  
 + make overlap, kinetic, nuclear, interaction more transparent
 + improve general readability
