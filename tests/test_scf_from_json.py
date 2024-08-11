@@ -17,31 +17,3 @@ if __name__ == '__main__':
     res = ch4.scf()
     
     print(ch4.ground_state_energy(res)) # prints something around -40 Ha
-    
-code = """
-mat = [func_interaction(x) for x in ch4.two_electron_arguments]
-"""
-import timeit
-print(timeit.timeit(code, number=1, globals=globals()))
-
-code = """
-func_interaction(ch4.two_electron_arguments[10]) 
-"""
-import timeit
-print(timeit.timeit(code, number=100, globals=globals()))
-
-
-args = jnp.array(ch4.two_electron_arguments)
-code = """
-mat = jax.vmap()
-"""
-import timeit
-print(timeit.timeit(code, number=1, globals=globals()))
-
-
-code = """
-ref = integrator.repulsion(cgf1, cgf2, cgf3, cgf4)
-"""
-import timeit
-print(timeit.timeit(code, number=1, globals=globals()))
-
