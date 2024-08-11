@@ -27,28 +27,33 @@ AtomChargeMap = {
     }    
 
 def basis_from_json(json_file):
-    """converts json format basis set adhering to molssi_bse_schema, schema_version 0.1 to phaseq's internal basis representation"""
+    """Reads `json_file`, which must contain a basis set specification adhering to MolSSI BSE schema 0.1.
+    Returns the corresponding internal basis representation of phaseQ.
+    The internal basis representation is a dictionary.
+    Atom names are keys, values are lists of arrays of dimension `number_of_gaussians' x 5.
+    For example, `basis["atom"][i]` is the i-th orbital for "atom", defined as [coefficient, l, m, n, alpha].
+    """
 
     def get_matching_angular_momentum(l):        
-        """computes cartesian angular momentum arrays for l, i.e. l = 1 => [[0,0,1], [0, 1, 0], [1 0, 0]]"""
+        """computes cartesian angular momentum arrays for l, i.e. l = 1 => [[0, 0, 1], [0, 1, 0], [1, 0, 0]]"""
         return list(map(list, filter(lambda x : sum(x) == l, product(range(l+1), range(l+1), range(l+1)))))
 
-    def parse_cgf(l, exps, cs):
-        return [[float(c)] + am + [float(exps[i])] for i, c in enumerate(cs) for am in angular_momentum_map[l]]
+    def parse_cgf(lmn, exps, cs):
+        """parses a single contracted gaussian function. Returns a N_gaussians x 5 Array"""
+        return jnp.array(
+            [ [float(c)] + lmn + [float(exps[i])] for i, c in enumerate(cs) ]
+    )
 
-    def parse_orbital(orbital):
-        """parses a single orbital. Returns a N_gaussians x 8 Array"""
+    def parse_shell(orbital):
+        """parses a single orbital shell. Returns an list of length N_cgf_in_shell, where each entry is a N_gaussians x 5 Array"""
 
         cs = orbital["coefficients"]
         am = orbital["angular_momentum"]
-        return jnp.array(reduce(lambda x,y : x+y,
-                      [parse_cgf(l, orbital["exponents"], cs[i]) for i, l in enumerate(am)]
-                      ))
+        return [parse_cgf(lmn, orbital["exponents"], cs[i]) for i, l in enumerate(am) for lmn in angular_momentum_map[l]]
 
     def parse_element(orbitals):
-        """parses single element info. Returns N_orbitals x N_gaussians x 8 Array."""
-
-        return [parse_orbital(o) for o in orbitals]
+        """parses single element info. Returns a list of N_cgf, where each entry is a N_gaussians x 5 Array"""
+        return reduce(lambda x,y : x + y, [parse_shell(o) for o in orbitals])
 
     def get_l_max(basis_json):
         return max(reduce(lambda x,y: x+y, [z["angular_momentum"] for y in [x["electron_shells"] for x in basis_json["elements"].values()] for z in y]))
