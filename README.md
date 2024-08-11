@@ -41,7 +41,7 @@ res = ch4.scf()
 print(ch4.ground_state_energy(res)) 
 ```
 
-Autodiff can be used to compute forces
+Right now, autodiff is useful for computing forces or susceptibilities.
 
 ## Details
 
@@ -53,11 +53,11 @@ phaseQ achieves that by relying on transformations of non-recursive expressions 
 
 As a consequence of replacing explicit loops with vectorized operations, high angular momentum matrix elements should be quite fast to compute. 
 
-Overall, phaseQ should be decently fast, especially under JIT on GPU, but probably does not achieve Fortran-tier performance. YMMV, of course. 
+Overall, phaseQ is not that fast on CPU, but achieves reasonable performance if JITed on GPU. YMMV, of course. 
 
 That said, there is plenty of room for relatively easy optimization, e.g.
 
 1. invariants (often involving powers of factorial arrays) are recomputed on every matrix element function call
 2. matrix elements are computed from orbital tuples instead of batches 
 3. contracted matrices are assembled by just calling into `jnp.einsum` every time
-4. so far, there is no profiling on how well XLA is able to fuse operations
+4. so far, there is *no parallelization for cgf matrix elements*.
