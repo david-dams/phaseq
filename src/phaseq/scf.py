@@ -85,10 +85,5 @@ def scf_loop(overlap,
 
     # scf loop
     rho, steps, error = jax.lax.fori_loop(0, max_steps, step, (rho_old, 0, jnp.inf))
-
-    # intermediate stats
-    print(f"After {steps} out of {max_steps}, scf finished with error {error}")
-
-    print(energy(rho, kinetic + nuclear + f_mean_field(rho)))
     
     return rho
