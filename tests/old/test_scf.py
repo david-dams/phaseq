@@ -60,6 +60,6 @@ if __name__ == '__main__':
         scale = 1.8897259886  # convert from angström to bohr
     )
 
-    rho = ch4.scf(tolerance = 1e-14)
+    res = ch4.scf(tolerance = 1e-12)
     
-    assert jnp.abs(rho - ref["density"]).max() < 1e-8
+    assert jnp.abs(res["rho"] - ref["density"]).max() < 1e-8
