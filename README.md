@@ -1,43 +1,63 @@
-# PhaseQ 
+# phaseQ
 
-A JAX-based Hartree-Fock implementation.
+Hartree-Fock in Python, just-in-time compiled and automatically differentiable, built on JAX.
 
 ## Features
 
 - [x] Restricted Hartree-Fock
-- [x] Interfaces with Gaussian basis sets in JSON format as provided by [basissetexchange](https://www.basissetexchange.org/)
-- [x] Loads structures from xyz files
+- [x] Differentiable + JITable
+- [x] Supports basis sets specified in MolSSI BSE schema 0.1, as from [basissetexchange](https://www.basissetexchange.org/)
+- [x] Supports xyz files
 
 ## Installation
 
-To install PhaseQ locally, run:
+To install phaseQ locally, clone this repository and run:
 
 ```sh
-pip install -e .
+pip install .
 ```
 
 ## Usage
 
-Here's a simple example of how to use PhaseQ:
+A basic example to compute the GS energy of methane is
 
 ```python
 from phaseq import Structure, basis_from_json
 
-sto3g = basis_from_json("sto3g.json")
+# load a basis set
+sto3g = basis_from_json("sto-3g.1.json")
+
+# load methane into a "Structure" object
 ch4 = Structure.from_xyz(
-    sto3g,
-    "ch4.xyz",
-    scale=1.8897259886  # Convert from angstroms to bohrs
+	sto3g,
+	"ch4.xyz",
+	scale = 1.8897259886  # convert from angström to bohr
 )
-rho = ch4.scf(tolerance=1e-14)
+
+# run a restricted Hartree-Fock calculation
+res = ch4.scf()
+    
+# this should be something around -40 Ha	
+print(ch4.ground_state_energy(res)) 
 ```
 
-## TODO
-
-- [ ] Clearer testing
-- [ ] Improve performance when assembling CGF matrix elements from PGF
-- [ ] Implement a post-HF method like MP2 or CI
+Autodiff can be used to compute forces
 
 ## Details
 
-The main challenge when implementing Gaussian electron matrix elements in JAX is computing them efficiently in an array-oriented manner. This project achieves that using non-recursive expressions derived by [Takaeta et al.](https://csclub.uwaterloo.ca/~pbarfuss/jpsj.21.2313.pdf). Further details are provided in `deriv.tex`.
+The main challenge when implementing Hartree-Fock in JAX is computing electron matrix elements efficiently in an array-oriented manner with tensors of static shapes, hopefully allowing XLA to fuse many operations.
+
+phaseQ achieves that by relying on transformations of non-recursive expressions derived by [Takaeta et al.](https://csclub.uwaterloo.ca/~pbarfuss/jpsj.21.2313.pdf). Further details are provided in `math.pdf`. 
+
+### Performance
+
+As a consequence of replacing explicit loops with vectorized operations, high angular momentum matrix elements should be quite fast to compute. 
+
+Overall, phaseQ should be decently fast, especially under JIT on GPU, but probably does not achieve Fortran-tier performance. YMMV, of course. 
+
+That said, there is plenty of room for relatively easy optimization, e.g.
+
+1. invariants (often involving powers of factorial arrays) are recomputed on every matrix element function call
+2. matrix elements are computed from orbital tuples instead of batches 
+3. contracted matrices are assembled by just calling into `jnp.einsum` every time
+4. so far, there is no profiling on how well XLA is able to fuse operations
