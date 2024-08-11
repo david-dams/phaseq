@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "phaseq"
-version = "0.0.1"
+version = "0.1"
 authors = [
   { name="David Dams", email="david.dams@kit.edu" },
 ]
@@ -17,6 +17,6 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  'jax==0.4.26',
-  'jaxlib==0.4.26',
+  'jax',
+  'jaxlib',
 ]
