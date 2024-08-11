@@ -1,26 +1,38 @@
 import jax
 import jax.numpy as jnp
 
-def get_mean_field(interaction_matrix):
-    
+def get_mean_field_full(interaction_matrix):
+    """returns a functiom to compute the full mean-field interaction"""    
     def inner(rho):
         return jnp.einsum('kl,ijlk->ij', rho, interaction_matrix) - 0.5 * jnp.einsum('kl,iklj->ij', rho, interaction_matrix)
 
     return inner
 
 def rho_closed_shell(vecs, N):
+    """constructs the closed-shell density matrix"""
     return 2*vecs[:, :N] @ vecs[:, :N].T
 
-def get_dc_mf(coulomb):
+def get_mean_field_direct_channel(coulomb):
+    """returns a functiom to compute the direct-channel mean-field interaction, i.e. only the "diagonal" of the interaction matrix"""
     def inner(rho):
         # 2 U_{abbd} <Ad>
         return 2 * jnp.diag( coulomb @ rho.diagonal() )
     return inner
 
 def trafo_symmetric(overlap):
+    """symmetric orthogonalization"""
     overlap_vals, overlap_vecs = jnp.linalg.eigh(overlap)  
     sqrt_overlap = jnp.diag(overlap_vals**(-0.5))
     return overlap_vecs @ sqrt_overlap @ overlap_vecs.T
+
+def trafo_canonical(overlap):
+    overlap_vals, overlap_vecs = jnp.linalg.eigh(overlap)  
+    sqrt_overlap = jnp.diag(overlap_vals**(-0.5))
+    return overlap_vecs @ sqrt_overlap
+
+def energy(rho, kinetic, nuclear, ham_eff):
+    """computes the energy for a given effective hamiltonian H_eff = T + V  + MF and density matrix."""
+    return 0.5 * jnp.einsum('ij,ji', rho, kinetic + nuclear + ham_eff)
 
 def scf_loop(overlap,
              kinetic,
@@ -43,12 +55,9 @@ def scf_loop(overlap,
         mixing : float, percentage of old density to be mixed in the update
         precision : float, |rho - rho_old| < precision => break scf loop
 
-    Returns: 
-        rho : scf density matrix
+    Returns:
+        dict: holding density matrix, overlap, kinetic, nuclear and effective hamiltonian matrix
     """
-
-    def energy(rho, ham_eff):
-         return 0.5 * jnp.einsum('ij,ji', rho, kinetic + nuclear + ham_eff)
     
     def update(arg):
         """scf update"""
@@ -65,7 +74,7 @@ def scf_loop(overlap,
         rho = f_rho(trafo @ vecs) + mixing * rho_old
 
         # update breaks
-        error = jnp.abs(energy(rho, ham_eff) - energy(rho_old, ham_eff))
+        error = jnp.abs(energy(rho, kinetic, nuclear, ham_eff) - energy(rho_old, kinetic, nuclear, ham_eff))
 
         error = jnp.linalg.norm(rho - rho_old)
 
@@ -85,5 +94,6 @@ def scf_loop(overlap,
 
     # scf loop
     rho, steps, error = jax.lax.fori_loop(0, max_steps, step, (rho_old, 0, jnp.inf))
-    
-    return rho
+
+    # TODO: a bit unelegant to recompute on return
+    return {"rho" : rho, "S" : overlap, "T": kinetic, "V" : nuclear, "ham_eff" : kinetic + nuclear + f_mean_field(rho)}
